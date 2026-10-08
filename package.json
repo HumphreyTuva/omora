@@ -1,0 +1,1 @@
+{"name":"omora","private":true,"workspaces":["apps/*"],"scripts":{"dev:api":"npm -w api run start:dev","dev:web":"npm -w web run dev","db:up":"docker compose up -d","db:push":"npm -w api run db:push","db:seed":"npm -w api run db:seed"}}
