@@ -1,1 +1,1 @@
-{"compilerOptions":{"module":"commonjs","target":"ES2021","outDir":"./dist","experimentalDecorators":true,"emitDecoratorMetadata":true,"esModuleInterop":true,"strict":false,"skipLibCheck":true,"incremental":true}}
+{"compilerOptions":{"module":"commonjs","target":"ES2021","outDir":"./dist","experimentalDecorators":true,"emitDecoratorMetadata":true,"esModuleInterop":true,"strict":false,"skipLibCheck":true},"include":["src"],"exclude":["node_modules","dist"]}
