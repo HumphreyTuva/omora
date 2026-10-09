@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { call, useStore } from './store';
+import GoogleButton from './GoogleButton';
 type Cat = { id: string; name: string; slug: string; icon?: string };
 const money = (n: number) => 'KSh ' + n.toLocaleString('en-KE');
 
@@ -13,6 +14,7 @@ function Login() {
   return (<div className="modal" role="dialog" aria-label="Sign in">
     <button className="x" onClick={() => setPanel('')} aria-label="Close">✕</button>
     <img src="/logo-dark.png" alt="Omora" /><h3>Sign in to Omora</h3>
+    <GoogleButton />
     <div className="mtabs"><button className={mode === 'phone' ? 'on' : ''} onClick={() => pick('phone')}>Phone</button><button className={mode === 'email' ? 'on' : ''} onClick={() => pick('email')}>Email</button></div>
     {!sent ? <><label>{mode === 'phone' ? 'Phone number' : 'Email address'}<input value={value} onChange={e => setValue(e.target.value)} type={mode === 'email' ? 'email' : 'tel'} inputMode={mode === 'email' ? 'email' : 'tel'} placeholder={mode === 'phone' ? '+2547XXXXXXXX' : 'you@example.com'} /></label>
       <button className="btn" disabled={busy} onClick={() => run(async () => { await call('/auth/otp/request', 'POST', body); setSent(true); })}>Send code</button></>

@@ -185,3 +185,7 @@ a.ic{color:inherit}
 }
 .side-top img{height:52px;width:auto}
 .fgrid img{height:84px;width:auto}
+/* Google sign-in button + divider */
+.gwrap{display:grid;justify-items:center;gap:10px}
+.or{display:flex;align-items:center;gap:10px;width:100%;color:var(--mu);font-size:13px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:#ddd}

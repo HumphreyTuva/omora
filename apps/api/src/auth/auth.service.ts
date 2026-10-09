@@ -9,6 +9,9 @@ const isEmail = (t: string) => t.includes('@');
 @Injectable()
 export class AuthService {
   constructor(private db: PrismaService, private jwt: JwtService, private sms: SmsService, private email: EmailService) {}
+  private async session(user: any) {
+    return { token: await this.jwt.signAsync({ sub: user.id, role: user.role }), user: { id: user.id, name: user.name, phone: user.phone, email: user.email, role: user.role } };
+  }
   async requestOtp(target: string) {
     const recent = await this.db.otp.count({ where: { target, createdAt: { gt: new Date(Date.now() - 60_000) } } });
     if (recent >= 1) throw new BadRequestException('Wait 60 seconds before requesting another code');
@@ -29,6 +32,20 @@ export class AuthService {
     const user = isEmail(target)
       ? await this.db.user.upsert({ where: { email: target }, update: {}, create: { email: target } })
       : await this.db.user.upsert({ where: { phone: target }, update: {}, create: { phone: target } });
-    return { token: await this.jwt.signAsync({ sub: user.id, role: user.role }), user: { id: user.id, name: user.name, phone: user.phone, email: user.email, role: user.role } };
+    return this.session(user);
+  }
+  // Google sign-in: the browser sends a signed ID token. We ask Google to check it, make sure it was issued for OUR app
+  // and the email is verified, then find or create the account by email (same account as an email-code sign-in).
+  async googleSignIn(credential: string) {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) throw new BadRequestException('Google sign-in is not set up yet');
+    const fail = new BadRequestException('Google sign-in failed. Please try again.');
+    let g: any;
+    try { const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential)); if (!r.ok) throw fail; g = await r.json(); } catch { throw fail; }
+    const okIssuer = ['accounts.google.com', 'https://accounts.google.com'].includes(g.iss);
+    if (g.aud !== clientId || !okIssuer || g.email_verified !== 'true' || !g.email) throw fail;
+    const email = String(g.email).toLowerCase();
+    const user = await this.db.user.upsert({ where: { email }, update: {}, create: { email, name: g.name || null } });
+    return this.session(user);
   }
 }
