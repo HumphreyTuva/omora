@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { call, useStore } from '../store';
+import { normalizePhone } from '../phone';
 function Rate({ productId, orderId }: { productId: string; orderId: string }) {
   const { token, toast } = useStore(); const [r, setR] = useState(0), [c, setC] = useState(''), [done, setDone] = useState(false);
   if (done) return <small>Thanks for your review ✔</small>;
@@ -16,7 +17,7 @@ function Actions({ o, reload }: { o: any; reload: () => void }) {
   const run = async (path: string, body: unknown, msg: string) => { try { await call(path, 'POST', body, token); toast(msg); reload(); } catch (e: any) { toast(e.message); } };
   const pay = async () => {
     let phone = localStorage.getItem('omora-phone') || '';
-    if (!phone) { phone = (window.prompt('Enter your M-Pesa phone number (format +2547XXXXXXXX)') || '').trim(); if (!phone) return; localStorage.setItem('omora-phone', phone); }
+    if (!phone) { const raw = (window.prompt('Enter your M-Pesa phone number, e.g. 0712 345 678') || '').trim(); if (!raw) return; const p = normalizePhone(raw); if (!p) { toast('That phone number does not look right'); return; } phone = p; localStorage.setItem('omora-phone', phone); }
     try {
       await call('/payments/initiate', 'POST', { orderId: o.id, phone }, token); toast('Enter your M-Pesa PIN on your phone');
       for (let i = 0; i < 12; i++) {

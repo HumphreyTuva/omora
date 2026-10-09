@@ -1,5 +1,6 @@
 'use client';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { normalizePhone } from './phone';
 export const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 export type Item = { id: string; name: string; emoji?: string; image?: string; price: number; qty: number };
 type Panel = '' | 'side' | 'cart' | 'login';
@@ -31,7 +32,7 @@ export function Provider({ children }: { children: React.ReactNode }) {
   const checkout = async (coupon?: string) => {
     if (!token) { setPanel('login'); return; }
     let phone = localStorage.getItem('omora-phone') || '';
-    if (!phone) { phone = (window.prompt('Enter your M-Pesa phone number (format +2547XXXXXXXX)') || '').trim(); if (!phone) return; localStorage.setItem('omora-phone', phone); }
+    if (!phone) { const raw = (window.prompt('Enter your M-Pesa phone number, e.g. 0712 345 678') || '').trim(); if (!raw) return; const p = normalizePhone(raw); if (!p) { toast('That phone number does not look right'); return; } phone = p; localStorage.setItem('omora-phone', phone); }
     try {
       const o = await call('/orders', 'POST', { items: items.map(i => ({ productId: i.id, quantity: i.qty })), coupon }, token);
       const p = await call('/payments/initiate', 'POST', { orderId: o.id, phone }, token);

@@ -1,10 +1,12 @@
 import { BadRequestException, Body, Controller, ForbiddenException, HttpCode, NotFoundException, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Transform } from 'class-transformer';
 import { IsString, Matches } from 'class-validator';
+import { normalizePhone } from '../common/phone';
 import { PrismaService } from '../prisma.service';
 import { NotificationsService, SmsService } from '../notifications/notifications.service';
 import { JwtGuard } from '../auth/guards';
 import { MpesaService } from './mpesa.service';
-class InitDto { @IsString() orderId: string; @Matches(/^\+254[17]\d{8}$/, { message: 'Use format +2547XXXXXXXX' }) phone: string; }
+class InitDto { @IsString() orderId: string; @Transform(({ value }) => (typeof value === 'string' ? normalizePhone(value) ?? value : value)) @Matches(/^\+254[17]\d{8}$/, { message: 'Enter a valid Kenyan phone number, e.g. 0712 345 678' }) phone: string; }
 const ACK = { ResultCode: 0, ResultDesc: 'Accepted' }; // always answer 200 so Safaricom doesn't keep retrying
 
 @Controller('payments')

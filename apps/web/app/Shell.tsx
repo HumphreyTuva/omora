@@ -2,24 +2,25 @@
 import { useEffect, useState } from 'react';
 import { call, useStore } from './store';
 import GoogleButton from './GoogleButton';
+import { normalizePhone } from './phone';
 type Cat = { id: string; name: string; slug: string; icon?: string };
 const money = (n: number) => 'KSh ' + n.toLocaleString('en-KE');
 
 function Login() {
   const { login, setPanel } = useStore();
-  const [mode, setMode] = useState<'phone' | 'email'>('phone'), [value, setValue] = useState('+254'), [code, setCode] = useState(''), [sent, setSent] = useState(false), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<'phone' | 'email'>('phone'), [value, setValue] = useState(''), [code, setCode] = useState(''), [sent, setSent] = useState(false), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
   const run = async (f: () => Promise<void>) => { setBusy(true); setErr(''); try { await f(); } catch (e: any) { setErr(e.message); } setBusy(false); };
-  const pick = (m: 'phone' | 'email') => { setMode(m); setValue(m === 'phone' ? '+254' : ''); setSent(false); setCode(''); setErr(''); };
-  const body = { [mode]: value.trim() };
+  const pick = (m: 'phone' | 'email') => { setMode(m); setValue(''); setSent(false); setCode(''); setErr(''); };
+  const phoneNorm = normalizePhone(value), body = mode === 'phone' ? { phone: phoneNorm || value.trim() } : { email: value.trim().toLowerCase() };
   return (<div className="modal" role="dialog" aria-label="Sign in">
     <button className="x" onClick={() => setPanel('')} aria-label="Close">✕</button>
     <img src="/logo-dark.png" alt="Omora" /><h3>Sign in to Omora</h3>
     <GoogleButton />
     <div className="mtabs"><button className={mode === 'phone' ? 'on' : ''} onClick={() => pick('phone')}>Phone</button><button className={mode === 'email' ? 'on' : ''} onClick={() => pick('email')}>Email</button></div>
-    {!sent ? <><label>{mode === 'phone' ? 'Phone number' : 'Email address'}<input value={value} onChange={e => setValue(e.target.value)} type={mode === 'email' ? 'email' : 'tel'} inputMode={mode === 'email' ? 'email' : 'tel'} placeholder={mode === 'phone' ? '+2547XXXXXXXX' : 'you@example.com'} /></label>
+    {!sent ? <><label>{mode === 'phone' ? 'Phone number (any format works)' : 'Email address'}<input value={value} onChange={e => setValue(e.target.value)} type={mode === 'email' ? 'email' : 'tel'} inputMode={mode === 'email' ? 'email' : 'tel'} placeholder={mode === 'phone' ? '0712 345 678' : 'you@example.com'} /></label>
       <button className="btn" disabled={busy} onClick={() => run(async () => { await call('/auth/otp/request', 'POST', body); setSent(true); })}>Send code</button></>
-    : <><label>6-digit code sent to {value}<input value={code} onChange={e => setCode(e.target.value.trim())} inputMode="numeric" maxLength={6} /></label>
-      <button className="btn" disabled={busy} onClick={() => run(async () => { const d = await call('/auth/otp/verify', 'POST', { ...body, code }); login(d.token, mode === 'phone' ? value.trim() : ''); })}>Verify and continue</button>
+    : <><label>6-digit code sent to {mode === 'phone' ? phoneNorm || value : value}<input value={code} onChange={e => setCode(e.target.value.trim())} inputMode="numeric" maxLength={6} /></label>
+      <button className="btn" disabled={busy} onClick={() => run(async () => { const d = await call('/auth/otp/verify', 'POST', { ...body, code }); login(d.token, mode === 'phone' ? phoneNorm || value.trim() : ''); })}>Verify and continue</button>
       <small>Testing locally? The code is printed in the API terminal.</small></>}
     {err && <p className="err">{err}</p>}
   </div>);
