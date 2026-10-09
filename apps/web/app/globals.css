@@ -176,3 +176,12 @@ a.ic{color:inherit}
   .actions{margin-left:auto;gap:22px}
   .ic,.me{flex:none}
 }
+/* ===== Logo: trimmed image, shown at its natural shape (no cropping) ===== */
+.logo{position:static;width:auto;height:auto;overflow:visible;display:flex;align-items:center}
+.logo img{position:static;transform:none;width:auto;height:46px;max-width:none}
+@media(min-width:1000px){
+  .logo{width:auto;height:auto}
+  .logo img{width:auto;height:62px}
+}
+.side-top img{height:52px;width:auto}
+.fgrid img{height:84px;width:auto}
