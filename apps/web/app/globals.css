@@ -176,6 +176,7 @@ a.ic{color:inherit}
   .actions{margin-left:auto;gap:22px}
   .ic,.me{flex:none}
 }
+
 /* ===== Logo: trimmed image, shown at its natural shape (no cropping) ===== */
 .logo{position:static;width:auto;height:auto;overflow:visible;display:flex;align-items:center}
 .logo img{position:static;transform:none;width:auto;height:46px;max-width:none}
@@ -185,7 +186,27 @@ a.ic{color:inherit}
 }
 .side-top img{height:52px;width:auto}
 .fgrid img{height:84px;width:auto}
+
 /* Google sign-in button + divider */
 .gwrap{display:grid;justify-items:center;gap:10px}
 .or{display:flex;align-items:center;gap:10px;width:100%;color:var(--mu);font-size:13px}
 .or::before,.or::after{content:"";flex:1;height:1px;background:#ddd}
+
+/* ===== Forms (seller product form, admin coupon form): inputs never overflow their card ===== */
+.sform,.sform label,.two{min-width:0}
+.sform input,.sform select,.sform textarea{width:100%;min-width:0;max-width:100%}
+.sform input[type=file]{padding:8px;font-size:13px;background:#fafaf7}
+.pd2{grid-template-columns:minmax(0,1fr)}
+@media(min-width:800px){.pd2{grid-template-columns:minmax(300px,380px) minmax(0,1fr)}}
+
+/* ===== Sidebar footer: account links with icons, like the category list ===== */
+.side-foot{padding:10px 10px 24px;display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--k3);margin-top:8px;font-size:15px;color:#fff}
+.side-foot .lbl{font-size:11px;letter-spacing:.14em;color:#8d8d8d;font-weight:700;padding:12px 12px 6px}
+.side-foot a{display:flex;align-items:center;gap:14px;padding:11px 12px;border-radius:12px;font-weight:600;color:#fff;opacity:0;transform:translateX(-24px);transition:background .2s,color .2s}
+.side.on .side-foot a{animation:slin .5s var(--e) forwards;animation-delay:calc(var(--i)*45ms + 150ms)}
+.side-foot a span{font-size:20px;width:36px;height:36px;display:grid;place-items:center;background:var(--k3);border-radius:10px;transition:.25s;flex:none}
+.side-foot a em{margin-left:auto;background:var(--y);color:#000;font:700 12px/1 system-ui;border-radius:20px;min-width:22px;padding:5px 7px;text-align:center}
+.side-foot a:hover{background:var(--k2);color:var(--y)}.side-foot a:hover span{background:var(--y);transform:scale(1.1) rotate(-6deg)}
+.side-foot a.out{color:#ff9a9a;margin-top:6px;border-top:1px solid var(--k3);border-radius:0 0 12px 12px;padding-top:14px}
+.side-foot a.out:hover{background:#2a1212;color:#ff6b6b}.side-foot a.out:hover span{background:#ff6b6b}
+@media(prefers-reduced-motion:reduce){.side-foot a{opacity:1;transform:none}}

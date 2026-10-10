@@ -42,7 +42,14 @@ export default function Shell({ cats }: { cats: Cat[] }) {
       <div className="side-top"><img src="/logo-dark.png" alt="Omora" /><button className="x" onClick={() => setPanel('')} aria-label="Close menu">✕</button></div>
       <div className="side-user"><span className="av">{token ? '✓' : '?'}</span><div><b>{token ? 'Signed in' : 'Welcome'}</b><small>Nairobi, Kenya</small></div></div>
       <nav>{nav.map((c: any, i) => <a key={c.id} href={href(c)} style={{ ['--i' as any]: i }} onClick={() => setPanel('')}><span>{c.icon || '🏠'}</span>{c.name}</a>)}</nav>
-      <div className="side-foot"><a href="/orders" onClick={() => setPanel('')}>My Orders</a><a href="/wishlist" onClick={() => setPanel('')}>Wishlist</a><a href="/notifications" onClick={() => setPanel('')}>Notifications{unread > 0 ? ` (${unread})` : ''}</a><a href="/seller" onClick={() => setPanel('')}>Seller Portal</a><a href="#" onClick={e => { e.preventDefault(); token ? logout() : setPanel('login'); }}>{token ? 'Sign out' : 'Sign in'}</a></div>
+      <div className="side-foot">
+        <p className="lbl">MY ACCOUNT</p>
+        <a href="/orders" style={{ ['--i' as any]: 9 }} onClick={() => setPanel('')}><span>📦</span>My Orders</a>
+        <a href="/wishlist" style={{ ['--i' as any]: 10 }} onClick={() => setPanel('')}><span>❤️</span>Wishlist{wish.length > 0 && <em>{wish.length}</em>}</a>
+        <a href="/notifications" style={{ ['--i' as any]: 11 }} onClick={() => setPanel('')}><span>🔔</span>Notifications{unread > 0 && <em>{unread}</em>}</a>
+        <a href="/seller" style={{ ['--i' as any]: 12 }} onClick={() => setPanel('')}><span>🏪</span>Seller Portal</a>
+        <a href="#" className="out" style={{ ['--i' as any]: 13 }} onClick={e => { e.preventDefault(); token ? logout() : setPanel('login'); }}><span>{token ? '🚪' : '👤'}</span>{token ? 'Sign out' : 'Sign in'}</a>
+      </div>
     </aside>
 
     <header className="top">
@@ -75,7 +82,7 @@ export default function Shell({ cats }: { cats: Cat[] }) {
     {panel === 'login' && <Login />}
     <nav className="tab" aria-label="Main"><a href="/">🏠<span>Home</span></a><a href="/orders">📦<span>Orders</span></a>
       <a href="#" onClick={e => { e.preventDefault(); setPanel('cart'); }}>🛒<span>Cart</span>{count > 0 && <em>{count}</em>}</a>
-      <a href="#" onClick={e => { e.preventDefault(); setPanel('side'); }}>☰<span>Menu</span>{unread > 0 && <em>{unread}</em>}</a>
+      <a href="/notifications">🔔<span>Alerts</span>{unread > 0 && <em>{unread}</em>}</a>
       <a href="#" onClick={e => { e.preventDefault(); token ? logout() : setPanel('login'); }}>👤<span>{token ? 'Sign out' : 'You'}</span></a></nav>
     <div className={'toast' + (msg ? ' on' : '')} role="status">{msg}</div>
   </>);
