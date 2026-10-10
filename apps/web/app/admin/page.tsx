@@ -1,4 +1,5 @@
 'use client';
+import ProductImage from '../ProductImage';
 import { useCallback, useEffect, useState } from 'react';
 import { call, useStore } from '../store';
 const money = (n: number) => 'KSh ' + (n || 0).toLocaleString('en-KE');
@@ -59,7 +60,7 @@ export default function Admin() {
           {s.status === 'PENDING_VERIFICATION' && <button className="btn sm o2" onClick={() => act(`/admin/sellers/${s.id}/reject`, 'Seller rejected')}>Reject</button>}
           {s.status === 'VERIFIED' && <button className="btn sm o2" onClick={() => act(`/admin/sellers/${s.id}/suspend`, 'Seller suspended')}>Suspend</button>}</div></article>))}</div>}
     {tab === 'Products' && <div className="olist">{!prods.length && <div className="empty">No products waiting for review. 🎉</div>}{prods.map(p => (
-      <article className="order" key={p.id}><div className="oline"><span className="oe">{p.images?.[0] ? <img src={p.images[0].url} alt="" /> : '📦'}</span><div><b>{p.name}</b><small>{p.seller.storeName} · {p.category.name} · {money(p.price)} · {p.stock} in stock</small></div></div>
+      <article className="order" key={p.id}><div className="oline"><span className="oe"><ProductImage src={p.images?.[0]?.url} emoji="📦" alt="" /></span><div><b>{p.name}</b><small>{p.seller.storeName} · {p.category.name} · {money(p.price)} · {p.stock} in stock</small></div></div>
         <div className="acts"><button className="btn sm" onClick={() => act(`/admin/products/${p.id}/approve`, 'Product is live ✔')}>Approve</button><button className="btn sm o2" onClick={() => act(`/admin/products/${p.id}/reject`, 'Product rejected')}>Reject</button></div></article>))}</div>}
     {tab === 'Orders' && <div className="olist">{!orders.length && <div className="empty">No orders yet.</div>}{orders.map(r => (
       <article className="order" key={r.id}><div className="ohead"><div><b>#{r.id.slice(-8).toUpperCase()}</b><small>{r.customer.phone} · {new Date(r.createdAt).toLocaleDateString('en-KE')} · {r.items.length} item(s)</small></div><b className="ototal">{money(r.total)}</b></div>

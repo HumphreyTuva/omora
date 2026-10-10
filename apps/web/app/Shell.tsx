@@ -1,4 +1,5 @@
 'use client';
+import ProductImage from './ProductImage';
 import { useEffect, useState } from 'react';
 import { call, useStore } from './store';
 import GoogleButton from './GoogleButton';
@@ -75,7 +76,7 @@ export default function Shell({ cats }: { cats: Cat[] }) {
     <aside className={'drawer' + (panel === 'cart' ? ' on' : '')} aria-label="Cart">
       <div className="dh"><h3>Your Cart ({count})</h3><button className="x" onClick={() => setPanel('')} aria-label="Close cart">✕</button></div>
       <div className="db">{items.length ? items.map((i: any) => (
-        <div className="line" key={i.id}><div className="pic">{i.image ? <img src={i.image} alt="" /> : i.emoji}</div><div><b>{i.name}</b><small>{money(i.price)}</small>
+        <div className="line" key={i.id}><div className="pic"><ProductImage src={i.image} emoji={i.emoji} alt="" /></div><div><b>{i.name}</b><small>{money(i.price)}</small>
           <div className="qty"><button onClick={() => qty(i.id, -1)} aria-label="Less">−</button>{i.qty}<button onClick={() => qty(i.id, 1)} aria-label="More">+</button></div></div></div>
       )) : <div className="empty">🛒<br />Your cart is empty.<br /><br /><a className="btn" href="/#products" onClick={() => setPanel('')}>Start shopping</a></div>}</div>
       {items.length > 0 && <div className="df"><div className="coupon"><input value={code} onChange={e => setCode(e.target.value)} placeholder="Coupon code" aria-label="Coupon code" /><button className="btn sm" onClick={applyCode}>Apply</button></div><div className="row"><span>Subtotal</span><span>{money(sub)}</span></div><div className="row"><span>Delivery</span><span>{fee ? money(fee) : 'Free'}</span></div>

@@ -1,4 +1,5 @@
 'use client';
+import ProductImage from '../ProductImage';
 import { useCallback, useEffect, useState } from 'react';
 import { API, call, useStore } from '../store';
 const money = (n: number) => 'KSh ' + (n || 0).toLocaleString('en-KE');
@@ -43,6 +44,6 @@ export default function Seller() {
         <div className="two"><label>Price (KSh)<input required type="number" min={1} value={f.price} onChange={x => setF({ ...f, price: x.target.value })} /></label><label>Stock<input required type="number" min={0} value={f.stock} onChange={x => setF({ ...f, stock: x.target.value })} /></label></div>
         <label>Photos (up to 5 · JPG, PNG or WebP · 3 MB each)<input key={tick} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={x => setFiles(Array.from(x.target.files || []).slice(0, 5))} /></label>{files.length > 0 && <small>{files.length} photo(s) selected</small>}
         <button className="btn">Submit for review</button></form>
-      <div className="olist">{prods.map(p => <article className="order" key={p.id}><div className="oline"><span className="oe">{p.images?.[0] ? <img src={p.images[0].url} alt="" /> : p.emoji || '📦'}</span><div><b>{p.name}</b><small>{money(p.price)} · {p.stock} in stock</small></div><span className={'chip ' + (p.status === 'LIVE' ? 'delivered' : 'paid')}>{label(p.status)}</span></div></article>)}</div></div>}
+      <div className="olist">{prods.map(p => <article className="order" key={p.id}><div className="oline"><span className="oe"><ProductImage src={p.images?.[0]?.url} emoji={p.emoji} alt="" /></span><div><b>{p.name}</b><small>{money(p.price)} · {p.stock} in stock</small></div><span className={'chip ' + (p.status === 'LIVE' ? 'delivered' : 'paid')}>{label(p.status)}</span></div></article>)}</div></div>}
   </main>);
 }

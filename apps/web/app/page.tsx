@@ -1,3 +1,4 @@
+import ProductImage from './ProductImage';
 import Heart from './Heart';
 import Hero from './Hero';
 import AddButton from './AddButton';
@@ -28,7 +29,7 @@ export default async function Home({ searchParams }: { searchParams: { q?: strin
         </form>
         <div className="grid">{data.items.length ? data.items.map(p => (
           <article className="card" key={p.id}>{p.badge && <span className="badge">{p.badge}</span>}<Heart id={p.id} />
-            <a href={`/products/${p.id}`}><div className="pic">{p.images?.[0] ? <img src={p.images[0].url} alt={p.name} loading="lazy" /> : <span>{p.emoji}</span>}</div><h3>{p.name}</h3></a>
+            <a href={`/products/${p.id}`}><div className="pic"><ProductImage src={p.images?.[0]?.url} emoji={p.emoji} alt={p.name} /></div><h3>{p.name}</h3></a>
             <div className="meta"><span className="s">★ {p.rating}</span><span className="st">● In Stock</span></div>
             <div className="price">{money(p.salePrice ?? p.price)}{p.salePrice && <s>{money(p.price)}</s>}</div>
             <div className="sell">{p.seller.storeName} <b>✔</b></div><AddButton p={{ id: p.id, name: p.name, emoji: p.emoji, image: p.images?.[0]?.url, price: p.salePrice ?? p.price }} /></article>

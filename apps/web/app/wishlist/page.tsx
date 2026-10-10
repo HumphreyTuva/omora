@@ -1,4 +1,5 @@
 'use client';
+import ProductImage from '../ProductImage';
 import { useEffect, useState } from 'react';
 import { call, useStore } from '../store';
 import Heart from '../Heart';
@@ -13,7 +14,7 @@ export default function Wishlist() {
     {list && !shown.length && <div className="empty">Nothing saved yet. Tap ♡ on any product.<br /><br /><a className="btn" href="/#products">Browse products</a></div>}
     <div className="grid">{shown.map(p => { const price = p.salePrice ?? p.price; return (
       <article className="card" key={p.id}><Heart id={p.id} />
-        <a href={`/products/${p.id}`}><div className="pic">{p.images?.[0] ? <img src={p.images[0].url} alt={p.name} /> : <span>{p.emoji}</span>}</div><h3>{p.name}</h3></a>
+        <a href={`/products/${p.id}`}><div className="pic"><ProductImage src={p.images?.[0]?.url} emoji={p.emoji} alt={p.name} /></div><h3>{p.name}</h3></a>
         <div className="price">{money(price)}{p.salePrice && <s>{money(p.price)}</s>}</div><div className="sell">{p.seller.storeName} <b>✔</b></div>
         <button className="add" onClick={() => add({ id: p.id, name: p.name, emoji: p.emoji, image: p.images?.[0]?.url, price })}>🛒 Add to Cart</button></article>); })}</div></main>);
 }
