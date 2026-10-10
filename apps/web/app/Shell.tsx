@@ -4,6 +4,9 @@ import { call, useStore } from './store';
 import GoogleButton from './GoogleButton';
 import { normalizePhone } from './phone';
 type Cat = { id: string; name: string; slug: string; icon?: string };
+// Yellow outline icons, as in the design (the 📍 emoji is red and can't be recoloured)
+const Pin = ({ size = 24 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#FFC400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.6" /></svg>;
+const Chevron = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFC400" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>;
 const money = (n: number) => 'KSh ' + n.toLocaleString('en-KE');
 
 function Login() {
@@ -53,13 +56,14 @@ export default function Shell({ cats }: { cats: Cat[] }) {
     </aside>
 
     <header className="top">
-      <div className="strip"><span>📍 Deliver to <b>Nairobi, Kenya</b></span><span className="mid">🛡 Fast · Secure · Trusted</span><span className="links"><a href="/seller/apply">Become a Seller</a><a href="/orders">Track Order</a></span></div>
+      <div className="strip"><span className="pinline"><Pin size={16} /> Deliver to <b>Nairobi, Kenya</b></span><span className="mid">🛡 Fast · Secure · Trusted</span><span className="links"><a href="/seller/apply">Become a Seller</a><a href="/orders">Track Order</a></span></div>
       <div className="bar">
         <button className="burger" onClick={() => setPanel('side')} aria-label="Open menu"><i /><i /><i /></button>
         <a className="logo" href="/"><img src="/logo-dark.png" alt="Omora All-in-One Marketplace" /></a>
         <form className="search" action="/"><input name="q" placeholder="Search for products, brands and categories…" /><button aria-label="Search">🔍</button></form>
         <div className="actions">
-          <a className="ic" href="/notifications" aria-label="Notifications">🔔{unread > 0 && <em>{unread}</em>}<small>Alerts</small></a>
+          <button className="loc" onClick={() => toast('Delivering to Nairobi, Kenya')} aria-label="Delivery location"><Pin size={28} /><span><small>Deliver to</small><b>Nairobi<Chevron /></b></span></button>
+          <a className="ic bell" href="/notifications" aria-label="Notifications">🔔{unread > 0 && <em>{unread}</em>}<small>Alerts</small></a>
           <a className="ic" href="/wishlist" aria-label="Wishlist">♡<em>{wish.length}</em><small>Wishlist</small></a>
           <button className="ic" onClick={() => setPanel('cart')} aria-label="Cart">🛒<em key={count} className="pop">{count}</em><small>Cart</small></button>
           <button className="me" onClick={() => token ? logout() : setPanel('login')} aria-label="Account">{token ? '✓' : '👤'}</button>

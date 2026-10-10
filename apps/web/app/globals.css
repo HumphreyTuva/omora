@@ -210,3 +210,21 @@ a.ic{color:inherit}
 .side-foot a.out{color:#ff9a9a;margin-top:6px;border-top:1px solid var(--k3);border-radius:0 0 12px 12px;padding-top:14px}
 .side-foot a.out:hover{background:#2a1212;color:#ff6b6b}.side-foot a.out:hover span{background:#ff6b6b}
 @media(prefers-reduced-motion:reduce){.side-foot a{opacity:1;transform:none}}
+
+/* ===== Mobile header: delivery location, wishlist, cart and account next to the logo (as in the design) ===== */
+.loc{display:none;align-items:center;gap:5px;font-size:18px;padding:0 8px 0 4px;margin-right:4px;border-right:1px solid var(--k3);color:#fff;text-align:left;line-height:1.1}
+.loc small{display:block;font-size:10px;color:#bbb}.loc b{font-size:12px;white-space:nowrap}
+@media(max-width:999px){
+  .actions{gap:2px}
+  .actions .ic{display:flex;font-size:22px;padding:4px 6px}
+  .actions .ic small{display:none}
+  .actions .ic.bell{display:none}
+  .actions .me{display:grid;place-items:center;width:36px;height:36px;font-size:16px;margin-left:4px}
+  .loc{display:flex}
+}
+@media(max-width:379px){.loc{display:none}}
+@media(min-width:1000px){.loc{display:none}}
+
+/* Yellow location pin (design) */
+.loc{gap:6px}.loc b{display:flex;align-items:center;gap:3px}
+.pinline{display:flex;align-items:center;gap:6px}
