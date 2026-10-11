@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 // Don't trust the browser's claimed type: check the file's first bytes too.
 const genuine = (mime: string, b: Buffer) => mime === 'image/jpeg' ? b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff : mime === 'image/png' ? b.subarray(0, 4).toString('hex') === '89504e47' : b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP';
@@ -17,6 +17,16 @@ export class StorageService {
   }) : null;
   constructor() {
     if (!this.s3 && process.env.RENDER) console.warn('WARNING: product photos are saved on a temporary disk and will disappear on restart. Set STORAGE_DRIVER=s3 (Cloudflare R2).');
+  }
+  // Removes a photo file (best effort: a missing file is not an error). Only touches the products/ folder.
+  async deleteImage(url: string): Promise<void> {
+    try {
+      const base = (process.env.S3_PUBLIC_URL || '').replace(/\/+$/, ''), local = `${process.env.API_PUBLIC_URL || 'http://localhost:4000'}/uploads/`;
+      const key = this.s3 && base && url.startsWith(base + '/') ? url.slice(base.length + 1) : url.startsWith(local) ? url.slice(local.length) : '';
+      if (!key.startsWith('products/') || key.includes('..')) return;
+      if (this.s3 && url.startsWith(base)) await this.s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
+      else await unlink(join(process.env.UPLOAD_DIR || 'uploads', key));
+    } catch (e) { console.error('Could not delete photo file', e); }
   }
   async saveImage(file: { buffer: Buffer; mimetype: string; size: number }): Promise<string> {
     const ext = EXT[file.mimetype];

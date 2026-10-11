@@ -1,11 +1,19 @@
-import { Body, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Req, UseGuards, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Req, UseGuards, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StorageService } from '../storage/storage.service';
-import { IsInt, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 import { PrismaService } from '../prisma.service';
 import { NotificationsService, SmsService } from '../notifications/notifications.service';
 import { JwtGuard, Roles } from '../auth/guards';
 class NewProduct { @IsString() name: string; @IsString() categoryId: string; @IsString() description: string; @IsInt() @Min(1) price: number; @IsInt() @Min(0) stock: number; }
+class EditProduct {
+  @IsOptional() @IsString() @Length(2, 120) name?: string;
+  @IsOptional() @IsString() categoryId?: string;
+  @IsOptional() @IsString() @Length(0, 2000) description?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(100000000) price?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(100000000) salePrice?: number | null; // null removes the sale price
+  @IsOptional() @IsInt() @Min(0) @Max(1000000) stock?: number;
+}
 
 @Controller() @UseGuards(JwtGuard)
 export class AdminController {
@@ -26,10 +34,51 @@ export class AdminController {
     if (!file) throw new BadRequestException('Choose an image');
     const s = await this.mySeller(req.user.id);
     const p = await this.db.product.findFirst({ where: { id, sellerId: s.id }, include: { images: true } });
-    if (!p) throw new NotFoundException();
+    if (!p || p.status === 'ARCHIVED') throw new NotFoundException();
     if (p.images.length >= 5) throw new BadRequestException('Maximum 5 images per product');
     const url = await this.storage.saveImage(file);
-    return this.db.productImage.create({ data: { productId: id, url } });
+    const img = await this.db.productImage.create({ data: { productId: id, url } });
+    if (p.status === 'LIVE' || p.status === 'APPROVED') await this.db.product.update({ where: { id }, data: { status: 'PENDING_REVIEW' } }); // new photos need approval too
+    return img;
+  }
+  @Get('seller/products/:id') @Roles('SELLER') async sellerProduct(@Req() req: any, @Param('id') id: string) {
+    const s = await this.mySeller(req.user.id);
+    const p = await this.db.product.findFirst({ where: { id, sellerId: s.id, status: { not: 'ARCHIVED' } }, include: { images: { select: { id: true, url: true }, orderBy: { id: 'asc' } } } });
+    if (!p) throw new NotFoundException(); return p;
+  }
+  // Price, sale price and stock change straight away. Changing the name, description or category (or adding photos) sends a live
+  // product back for admin approval, so a listing can't be swapped for something else after it was approved. Rejected products are resubmitted.
+  @Patch('seller/products/:id') @Roles('SELLER') async editProduct(@Req() req: any, @Param('id') id: string, @Body() b: EditProduct) {
+    const s = await this.mySeller(req.user.id);
+    const p = await this.db.product.findFirst({ where: { id, sellerId: s.id, status: { not: 'ARCHIVED' } } });
+    if (!p) throw new NotFoundException();
+    if (b.categoryId && !(await this.db.category.findUnique({ where: { id: b.categoryId } }))) throw new BadRequestException('Choose a valid category');
+    const price = b.price ?? p.price, sale = b.salePrice !== undefined ? b.salePrice : p.salePrice;
+    if (sale != null && sale >= price) throw new BadRequestException('The sale price must be lower than the normal price');
+    const sensitive = (b.name !== undefined && b.name !== p.name) || (b.description !== undefined && b.description !== p.description) || (b.categoryId !== undefined && b.categoryId !== p.categoryId);
+    let status = p.status;
+    if ((p.status === 'LIVE' || p.status === 'APPROVED') && sensitive) status = 'PENDING_REVIEW';
+    if (p.status === 'REJECTED') status = 'PENDING_REVIEW';
+    const updated = await this.db.product.update({ where: { id }, data: { name: b.name?.trim(), categoryId: b.categoryId, description: b.description, price: b.price, salePrice: b.salePrice, stock: b.stock, status } });
+    return { ...updated, sentForReview: status !== p.status };
+  }
+  @Delete('seller/products/:id/images/:imageId') @Roles('SELLER') async removeImage(@Req() req: any, @Param('id') id: string, @Param('imageId') imageId: string) {
+    const s = await this.mySeller(req.user.id);
+    const img = await this.db.productImage.findFirst({ where: { id: imageId, productId: id, product: { sellerId: s.id } } });
+    if (!img) throw new NotFoundException();
+    await this.db.productImage.delete({ where: { id: imageId } });
+    await this.storage.deleteImage(img.url);
+    return { removed: true };
+  }
+  // A product nobody has ordered is deleted completely. One with order history is archived instead (hidden everywhere), so past orders stay intact.
+  @Delete('seller/products/:id') @Roles('SELLER') async deleteProduct(@Req() req: any, @Param('id') id: string) {
+    const s = await this.mySeller(req.user.id);
+    const p = await this.db.product.findFirst({ where: { id, sellerId: s.id, status: { not: 'ARCHIVED' } }, include: { images: true, _count: { select: { items: true } } } });
+    if (!p) throw new NotFoundException();
+    if (p._count.items > 0) { await this.db.product.update({ where: { id }, data: { status: 'ARCHIVED', stock: 0 } }); return { deleted: true, archived: true }; }
+    await this.db.$transaction([this.db.wishlistItem.deleteMany({ where: { productId: id } }), this.db.productImage.deleteMany({ where: { productId: id } }), this.db.product.delete({ where: { id } })]);
+    for (const img of p.images) await this.storage.deleteImage(img.url);
+    return { deleted: true };
   }
   @Get('seller/orders') @Roles('SELLER') async sellerOrders(@Req() req: any) {
     const s = await this.mySeller(req.user.id);
@@ -37,7 +86,7 @@ export class AdminController {
   }
   @Get('seller/products') @Roles('SELLER') async sellerProducts(@Req() req: any) {
     const s = await this.mySeller(req.user.id);
-    return this.db.product.findMany({ where: { sellerId: s.id }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, emoji: true, price: true, stock: true, status: true, images: { select: { url: true }, take: 1 } } });
+    return this.db.product.findMany({ where: { sellerId: s.id, status: { not: 'ARCHIVED' } }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, emoji: true, price: true, stock: true, status: true, images: { select: { url: true }, take: 1 } } });
   }
   // Earnings: delivered = available, paid-but-not-delivered = pending. Commission already stored per item.
   @Get('seller/earnings') @Roles('SELLER') async earnings(@Req() req: any) {

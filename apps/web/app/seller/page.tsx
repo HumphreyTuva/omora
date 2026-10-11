@@ -18,6 +18,10 @@ export default function Seller() {
   if (denied) return <main className="wrap"><div className="empty">This account isn’t a seller yet. <a href="/seller/apply"><b>Apply to sell</b></a> (testing seller: +254700000000).</div></main>;
   const move = async (id: string, status: string) => { try { await call(`/orders/items/${id}/status`, 'PATCH', { status }, token); toast('Order updated ✔'); load(); } catch (x: any) { toast(x.message); } };
   const payout = async () => { try { await call('/seller/payouts', 'POST', undefined, token); toast('Payout requested ✔'); load(); } catch (x: any) { toast(x.message); } };
+  const removeProduct = async (p: any) => {
+    if (!window.confirm(`Delete "${p.name}"? This cannot be undone.`)) return;
+    try { await call(`/seller/products/${p.id}`, 'DELETE', undefined, token); toast('Product deleted'); load(); } catch (x: any) { toast(x.message); }
+  };
   const submit = async (ev: React.FormEvent) => { ev.preventDefault(); try { if (files.some(x => x.size > 3 * 1024 * 1024)) { toast('Each photo must be under 3 MB'); return; }
       const prod = await call('/seller/products', 'POST', { ...f, price: +f.price, stock: +f.stock }, token); let ok = true;
       for (const file of files) { const fd = new FormData(); fd.append('image', file);
@@ -44,6 +48,7 @@ export default function Seller() {
         <div className="two"><label>Price (KSh)<input required type="number" min={1} value={f.price} onChange={x => setF({ ...f, price: x.target.value })} /></label><label>Stock<input required type="number" min={0} value={f.stock} onChange={x => setF({ ...f, stock: x.target.value })} /></label></div>
         <label>Photos (up to 5 · JPG, PNG or WebP · 3 MB each)<input key={tick} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={x => setFiles(Array.from(x.target.files || []).slice(0, 5))} /></label>{files.length > 0 && <small>{files.length} photo(s) selected</small>}
         <button className="btn">Submit for review</button></form>
-      <div className="olist">{prods.map(p => <article className="order" key={p.id}><div className="oline"><span className="oe"><ProductImage src={p.images?.[0]?.url} emoji={p.emoji} alt="" /></span><div><b>{p.name}</b><small>{money(p.price)} · {p.stock} in stock</small></div><span className={'chip ' + (p.status === 'LIVE' ? 'delivered' : 'paid')}>{label(p.status)}</span></div></article>)}</div></div>}
+      <div className="olist">{prods.map(p => <article className="order" key={p.id}><div className="oline"><span className="oe"><ProductImage src={p.images?.[0]?.url} emoji={p.emoji} alt="" /></span><div><b>{p.name}</b><small>{money(p.price)} · {p.stock} in stock</small></div><span className={'chip ' + (p.status === 'LIVE' ? 'delivered' : 'paid')}>{label(p.status)}</span></div>
+        <div className="acts" style={{ marginTop: 8 }}><a className="btn sm" href={`/seller/products/${p.id}`}>Edit</a><button className="btn sm o2" onClick={() => removeProduct(p)}>Delete</button></div></article>)}</div></div>}
   </main>);
 }
