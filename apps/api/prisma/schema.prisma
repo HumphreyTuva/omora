@@ -1,173 +1,258 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "postgresql"  url = env("DATABASE_URL") }
+generator client {
+  provider = "prisma-client-js"
+}
 
-enum Role { CUSTOMER SELLER ADMIN SUPPORT_AGENT LOGISTICS_AGENT }
-enum SellerStatus { PENDING_VERIFICATION VERIFIED SUSPENDED REJECTED }
-enum ProductStatus { DRAFT PENDING_REVIEW APPROVED LIVE REJECTED ARCHIVED }
-enum OrderStatus { PENDING_PAYMENT PAID SELLER_CONFIRMED PROCESSING READY_FOR_PICKUP PICKED_UP IN_TRANSIT OUT_FOR_DELIVERY DELIVERED CANCELLED REFUND_REQUESTED REFUNDED RETURNED DISPUTED }
-enum PaymentStatus { PENDING SUCCESS FAILED REFUNDED }
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-model User { id String @id @default(cuid())
-  name String?
-  phone String? @unique
-  email String? @unique
-  passwordHash String?
-  role Role @default(CUSTOMER)
-  createdAt DateTime @default(now())
-  seller Seller?
-  orders Order[]
-  reviews Review[]
-  wishlist WishlistItem[]
-  notifications Notification[] }
+enum Role {
+  CUSTOMER
+  SELLER
+  ADMIN
+  SUPPORT_AGENT
+  LOGISTICS_AGENT
+}
 
-model Otp { id String @id @default(cuid())
-  target String
-  codeHash String
+enum SellerStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  SUSPENDED
+  REJECTED
+}
+
+enum ProductStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  LIVE
+  REJECTED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  SELLER_CONFIRMED
+  PROCESSING
+  READY_FOR_PICKUP
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  REFUND_REQUESTED
+  REFUNDED
+  RETURNED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String?
+  phone         String?        @unique
+  email         String?        @unique
+  passwordHash  String?
+  role          Role           @default(CUSTOMER)
+  createdAt     DateTime       @default(now())
+  seller        Seller?
+  orders        Order[]
+  reviews       Review[]
+  wishlist      WishlistItem[]
+  notifications Notification[]
+}
+
+model Otp {
+  id        String   @id @default(cuid())
+  target    String
+  codeHash  String
   expiresAt DateTime
-  attempts Int @default(0)
+  attempts  Int      @default(0)
   createdAt DateTime @default(now())
-  @@index([target]) }
 
-model Seller { id String @id @default(cuid())
-  userId String @unique
-  user User @relation(fields: [userId], references: [id])
-  storeName String
-  status SellerStatus @default(PENDING_VERIFICATION)
-  rating Float @default(0)
+  @@index([target])
+}
+
+model Seller {
+  id                 String         @id @default(cuid())
+  userId             String         @unique
+  user               User           @relation(fields: [userId], references: [id])
+  storeName          String
+  status             SellerStatus   @default(PENDING_VERIFICATION)
+  rating             Float          @default(0)
   commissionOverride Float?
-  products Product[]
-  orderItems OrderItem[]
-  payouts SellerPayout[] }
+  products           Product[]
+  orderItems         OrderItem[]
+  payouts            SellerPayout[]
+}
 
-model Category { id String @id @default(cuid())
-  name String @unique
-  slug String @unique
-  icon String?
-  commissionRate Float @default(0.10)
-  products Product[] }
+model Category {
+  id             String    @id @default(cuid())
+  name           String    @unique
+  slug           String    @unique
+  icon           String?
+  commissionRate Float     @default(0.10)
+  products       Product[]
+}
 
 // Money is stored as integer KSh to avoid float bugs.
-model Product { id String @id @default(cuid())
-  sellerId String
-  seller Seller @relation(fields: [sellerId], references: [id])
-  categoryId String
-  category Category @relation(fields: [categoryId], references: [id])
-  name String
-  description String @default("")
-  price Int
-  salePrice Int?
-  stock Int @default(0)
-  badge String?
-  emoji String?
-  rating Float @default(0)
-  reviewCount Int @default(0)
-  status ProductStatus @default(DRAFT)
-  createdAt DateTime @default(now())
-  images ProductImage[]
-  items OrderItem[]
-  reviews Review[]
-  wishlist WishlistItem[]
+model Product {
+  id          String         @id @default(cuid())
+  sellerId    String
+  seller      Seller         @relation(fields: [sellerId], references: [id])
+  categoryId  String
+  category    Category       @relation(fields: [categoryId], references: [id])
+  name        String
+  description String         @default("")
+  price       Int
+  salePrice   Int?
+  stock       Int            @default(0)
+  badge       String?
+  emoji       String?
+  rating      Float          @default(0)
+  reviewCount Int            @default(0)
+  status      ProductStatus  @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  images      ProductImage[]
+  items       OrderItem[]
+  reviews     Review[]
+  wishlist    WishlistItem[]
+
   @@index([categoryId])
-  @@index([status]) }
+  @@index([status])
+}
 
-model ProductImage { id String @id @default(cuid())
+model ProductImage {
+  id        String  @id @default(cuid())
   productId String
-  product Product @relation(fields: [productId], references: [id])
-  url String }
+  product   Product @relation(fields: [productId], references: [id])
+  url       String
+}
 
-model Order { id String @id @default(cuid())
-  customerId String
-  customer User @relation(fields: [customerId], references: [id])
-  total Int
-  deliveryFee Int @default(0)
+model Order {
+  id           String      @id @default(cuid())
+  customerId   String
+  customer     User        @relation(fields: [customerId], references: [id])
+  total        Int
+  deliveryFee  Int         @default(0)
   refundReason String?
-  discount Int @default(0)
-  couponCode String?
-  status OrderStatus @default(PENDING_PAYMENT)
-  createdAt DateTime @default(now())
-  items OrderItem[]
-  payments Payment[]
-  shipments Shipment[] }
+  discount     Int         @default(0)
+  couponCode   String?
+  status       OrderStatus @default(PENDING_PAYMENT)
+  createdAt    DateTime    @default(now())
+  items        OrderItem[]
+  payments     Payment[]
+  shipments    Shipment[]
+}
 
-model OrderItem { id String @id @default(cuid())
-  orderId String
-  order Order @relation(fields: [orderId], references: [id])
-  productId String
-  product Product @relation(fields: [productId], references: [id])
-  sellerId String
-  seller Seller @relation(fields: [sellerId], references: [id])
-  quantity Int
-  price Int
+model OrderItem {
+  id         String      @id @default(cuid())
+  orderId    String
+  order      Order       @relation(fields: [orderId], references: [id])
+  productId  String
+  product    Product     @relation(fields: [productId], references: [id])
+  sellerId   String
+  seller     Seller      @relation(fields: [sellerId], references: [id])
+  quantity   Int
+  price      Int
   commission Int
-  status OrderStatus @default(PENDING_PAYMENT) }
+  status     OrderStatus @default(PENDING_PAYMENT)
+}
 
-model Payment { id String @id @default(cuid())
-  orderId String
-  order Order @relation(fields: [orderId], references: [id])
-  provider String
-  amount Int
-  reference String?
-  status PaymentStatus @default(PENDING)
-  createdAt DateTime @default(now())
-  completedAt DateTime? }
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       Order         @relation(fields: [orderId], references: [id])
+  provider    String
+  amount      Int
+  reference   String?
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  completedAt DateTime?
+}
 
-model Shipment { id String @id @default(cuid())
-  orderId String
-  order Order @relation(fields: [orderId], references: [id])
-  provider String
+model Shipment {
+  id             String          @id @default(cuid())
+  orderId        String
+  order          Order           @relation(fields: [orderId], references: [id])
+  provider       String
   trackingNumber String?
-  status String @default("CREATED")
-  createdAt DateTime @default(now())
-  events ShipmentEvent[] }
+  status         String          @default("CREATED")
+  createdAt      DateTime        @default(now())
+  events         ShipmentEvent[]
+}
 
-model Review { id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id])
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
   productId String
-  product Product @relation(fields: [productId], references: [id])
-  orderId String
-  rating Int
-  comment String?
+  product   Product  @relation(fields: [productId], references: [id])
+  orderId   String
+  rating    Int
+  comment   String?
   createdAt DateTime @default(now())
-  @@unique([userId, productId, orderId]) }
 
-model SellerPayout { id String @id @default(cuid())
-  sellerId String
-  seller Seller @relation(fields: [sellerId], references: [id])
-  amount Int
-  status String @default("PENDING")
-  reference String? }
+  @@unique([userId, productId, orderId])
+}
 
-model WishlistItem { id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id])
+model SellerPayout {
+  id        String  @id @default(cuid())
+  sellerId  String
+  seller    Seller  @relation(fields: [sellerId], references: [id])
+  amount    Int
+  status    String  @default("PENDING")
+  reference String?
+}
+
+model WishlistItem {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
   productId String
-  product Product @relation(fields: [productId], references: [id])
-  @@unique([userId, productId]) }
+  product   Product @relation(fields: [productId], references: [id])
 
-model Coupon { id String @id @default(cuid())
-  code String @unique
+  @@unique([userId, productId])
+}
+
+model Coupon {
+  id         String    @id @default(cuid())
+  code       String    @unique
   percentOff Int?
-  amountOff Int?
-  minSpend Int @default(0)
-  maxUses Int?
-  used Int @default(0)
-  expiresAt DateTime?
-  active Boolean @default(true) }
+  amountOff  Int?
+  minSpend   Int       @default(0)
+  maxUses    Int?
+  used       Int       @default(0)
+  expiresAt  DateTime?
+  active     Boolean   @default(true)
+}
 
-model ShipmentEvent { id String @id @default(cuid())
+model ShipmentEvent {
+  id         String   @id @default(cuid())
   shipmentId String
-  shipment Shipment @relation(fields: [shipmentId], references: [id])
-  status String
-  note String?
-  createdAt DateTime @default(now()) }
+  shipment   Shipment @relation(fields: [shipmentId], references: [id])
+  status     String
+  note       String?
+  createdAt  DateTime @default(now())
+}
 
-model Notification { id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id])
-  title String
-  body String
-  link String?
-  read Boolean @default(false)
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  link      String?
+  read      Boolean  @default(false)
   createdAt DateTime @default(now())
-  @@index([userId, read]) }
+
+  @@index([userId, read])
+}
