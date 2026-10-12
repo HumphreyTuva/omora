@@ -18,7 +18,10 @@ export class AuthService {
     const code = String(randomInt(100000, 999999));
     await this.db.otp.create({ data: { target, codeHash: hash(code), expiresAt: new Date(Date.now() + 5 * 60_000) } });
     const msg = `Your Omora code is ${code}. It expires in 5 minutes.`;
-    if (isEmail(target)) await this.email.send(target, 'Your Omora sign-in code', msg); else await this.sms.send(target, msg);
+    if (isEmail(target)) {
+      const ok = await this.email.send(target, 'Your Omora sign-in code', msg);
+      if (!ok) { await this.db.otp.deleteMany({ where: { target } }); throw new BadRequestException('We could not send the email right now. Please try again, or sign in with Google.'); }
+    } else await this.sms.send(target, msg);
     return { sent: true };
   }
   async verifyOtp(target: string, code: string) {
