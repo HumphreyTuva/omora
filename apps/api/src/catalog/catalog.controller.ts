@@ -1,9 +1,12 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { deliveryConfig } from '../logistics/providers';
 const sorts: Record<string, any> = { cheapest: { price: 'asc' }, expensive: { price: 'desc' }, rated: { rating: 'desc' }, newest: { createdAt: 'desc' }, popular: { reviewCount: 'desc' } };
 @Controller()
 export class CatalogController {
   constructor(private db: PrismaService) {}
+  // Public settings the website needs to show the same delivery fee the server will charge.
+  @Get('config') config() { return deliveryConfig(); }
   @Get('categories') categories() { return this.db.category.findMany({ select: { id: true, name: true, slug: true, icon: true }, orderBy: { name: 'asc' } }); }
   @Get('products')
   async products(@Query('q') q?: string, @Query('category') category?: string, @Query('sort') sort?: string, @Query('page') page = '1', @Query('limit') limit = '20', @Query('minPrice') minPrice?: string, @Query('maxPrice') maxPrice?: string, @Query('minRating') minRating?: string, @Query('inStock') inStock?: string) {

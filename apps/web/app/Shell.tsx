@@ -32,7 +32,9 @@ function Login() {
 
 export default function Shell({ cats }: { cats: Cat[] }) {
   const { unread, wish, items, count, qty, panel, setPanel, msg, token, logout, checkout, toast } = useStore();
-  const sub = items.reduce((a: number, i: any) => a + i.price * i.qty, 0), fee = !items.length ? 0 : sub >= 20000 ? 0 : 350;
+  const [cfg, setCfg] = useState({ deliveryFee: 350, freeAbove: 20000 });
+  useEffect(() => { call('/config').then(setCfg).catch(() => {}); }, []);
+  const sub = items.reduce((a: number, i: any) => a + i.price * i.qty, 0), fee = !items.length ? 0 : cfg.freeAbove > 0 && sub >= cfg.freeAbove ? 0 : cfg.deliveryFee;
   const [code, setCode] = useState(''), [applied, setApplied] = useState<{ code: string; discount: number } | null>(null);
   const disc = applied?.discount || 0;
   useEffect(() => { if (!applied) return; if (!items.length) { setApplied(null); return; }

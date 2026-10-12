@@ -5,7 +5,7 @@ const money = (n: number) => 'KSh ' + n.toLocaleString('en-KE');
 export default async function ProductPage({ params }: { params: { id: string } }) {
   const r = await fetch(`${API}/products/${params.id}`, { cache: 'no-store' }).catch(() => null);
   if (!r || !r.ok) return <main className="wrap"><div className="empty">This product is no longer available. <a href="/"><b>Back to shop</b></a></div></main>;
-  const p = await r.json(); const reviews: any[] = await fetch(`${API}/reviews?productId=${p.id}`, { cache: 'no-store' }).then(x => x.json()).catch(() => []); const price = p.salePrice ?? p.price;
+  const cfg = await fetch(`${API}/config`, { cache: 'no-store' }).then(x => x.json()).catch(() => ({ deliveryFee: 350, freeAbove: 20000 })); const p = await r.json(); const reviews: any[] = await fetch(`${API}/reviews?productId=${p.id}`, { cache: 'no-store' }).then(x => x.json()).catch(() => []); const price = p.salePrice ?? p.price;
   return (<main className="wrap pdp">
     <a className="back" href={`/?category=${p.category.slug}#products`}>‹ {p.category.name}</a>
     <div className="pd">
@@ -15,7 +15,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
         <div className="meta"><span className="s">★ {p.rating}</span><span>{p.reviewCount.toLocaleString()} reviews</span><span className="st">● {p.stock > 0 ? 'In Stock' : 'Out of stock'}</span></div>
         <div className="price big">{money(price)}{p.salePrice && <s>{money(p.price)}</s>}</div>
         <div className="sellerbox"><div><b>{p.seller.storeName} <span style={{ color: '#1d9bf0' }}>✔</span></b><small>Verified seller · ★ {p.seller.rating}</small></div></div>
-        <ul className="perks"><li>🚚 Delivery from KSh 350 (free from KSh 20,000)</li><li>🛡 Omora Protected — buy with confidence</li><li>↩ Easy returns within 7 days</li></ul>
+        <ul className="perks"><li>🚚 Delivery KSh {cfg.deliveryFee.toLocaleString('en-KE')}{cfg.freeAbove > 0 ? ` (free from KSh ${cfg.freeAbove.toLocaleString('en-KE')})` : ''}</li><li>🛡 Omora Protected — buy with confidence</li><li>↩ Easy returns within 7 days</li></ul>
         {p.description && <p className="desc">{p.description}</p>}
         {p.stock > 0 ? <AddButton p={{ id: p.id, name: p.name, emoji: p.emoji, image: p.images?.[0]?.url, price }} /> : <button className="add" disabled>Out of stock</button>}
       </div>
