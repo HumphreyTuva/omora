@@ -46,14 +46,14 @@ export class PaymentsController implements OnModuleInit {
     if (process.env.MPESA_MODE === 'live' && (!expected || secret !== expected)) { console.error('M-Pesa callback rejected: bad or missing secret'); return ACK; }
     const cb = body?.Body?.stkCallback;
     if (!cb) return ACK;
-    const payment = await this.db.payment.findFirst({ where: { reference: cb.CheckoutRequestID, status: 'PENDING' } });
+    const payment = await this.db.payment.findFirst({ where: { reference: cb.CheckoutRequestID, status: { in: ['PENDING', 'FAILED'] } } });
     if (!payment) return ACK;
     if (cb.ResultCode === 0) {
       const amount = Number(cb.CallbackMetadata?.Item?.find((i: any) => i.Name === 'Amount')?.Value);
       const q = await this.mpesa.stkQuery(cb.CheckoutRequestID);
       if (amount === payment.amount && q.resultCode === 0) await this.settle(payment.id, true);
       else console.log('M-Pesa callback not settled yet', { amountOk: amount === payment.amount, query: q.resultCode }); // the 20-second sweep will retry
-    } else await this.settle(payment.id, false);
+    } else if (payment.status === 'PENDING') await this.settle(payment.id, false);
     return ACK;
   }
 
@@ -71,19 +71,21 @@ export class PaymentsController implements OnModuleInit {
   }
   private async reconcile(order: any) {
     if (order.status !== 'PENDING_PAYMENT') return { paid: order.status !== 'CANCELLED', failed: false };
-    const waiting = order.payments.filter((x: any) => x.status === 'PENDING' && x.reference);
-    let reason: string | undefined, sawFailure = false;
-    for (const p of waiting) {
+    const live = process.env.MPESA_MODE === 'live', recent = Date.now() - 72 * 3600_000;
+    const usable = (order.payments as any[]).filter(x => x.reference && !(live && String(x.reference).startsWith('MOCK-')));
+    const pendings = usable.filter(x => x.status === 'PENDING');
+    // Normally check the payments still waiting. If none are waiting, re-check recent "failed" ones too, in case a payment
+    // was wrongly marked failed but the money actually went through.
+    const toCheck = pendings.length ? pendings : usable.filter(x => x.status === 'FAILED' && +new Date(x.createdAt) > recent);
+    let reason: string | undefined, sawFailure = false, stillWaiting = false;
+    for (const p of toCheck) {
       const q = await this.mpesa.stkQuery(p.reference);
       if (q.resultCode === 0) { await this.settle(p.id, true); return { paid: true, failed: false }; }
-      if (q.resultCode !== null) { await this.settle(p.id, false); sawFailure = true; reason = reasonFor(q.resultCode, q.desc); }
+      if (q.resultCode !== null) { if (p.status === 'PENDING') await this.settle(p.id, false); sawFailure = true; reason = reasonFor(q.resultCode, q.desc); }
+      else if (p.status === 'PENDING') stillWaiting = true;
     }
-    const stillWaiting = waiting.length > 0 && !sawFailure;
-    const sorted = [...order.payments].sort((a: any, b: any) => +new Date(b.createdAt) - +new Date(a.createdAt));
-    if (!stillWaiting && (sawFailure || sorted[0]?.status === 'FAILED')) {
-      if (!reason && sorted[0]?.reference) { const q = await this.mpesa.stkQuery(sorted[0].reference); reason = reasonFor(q.resultCode, q.desc); }
-      return { paid: false, failed: true, reason: reason || 'The payment was not completed.' };
-    }
+    if (stillWaiting) return { paid: false, failed: false };
+    if (sawFailure || (!toCheck.length && usable.some(x => x.status === 'FAILED'))) return { paid: false, failed: true, reason: reason || 'The payment was not completed.' };
     return { paid: false, failed: false };
   }
 
@@ -93,10 +95,10 @@ export class PaymentsController implements OnModuleInit {
     await this.settle(id, true); return { ok: true };
   }
 
-  // Safe to call twice: only a PENDING payment can be settled, once.
+  // Safe to call twice: a payment can succeed only once. A waiting (PENDING) payment can become paid or failed; a FAILED one can still be rescued by a real success.
   private async settle(paymentId: string, ok: boolean) {
     const done = await this.db.$transaction(async tx => {
-      const claim = await tx.payment.updateMany({ where: { id: paymentId, status: 'PENDING' }, data: { status: ok ? 'SUCCESS' : 'FAILED', completedAt: new Date() } });
+      const claim = await tx.payment.updateMany({ where: { id: paymentId, status: (ok ? { in: ['PENDING', 'FAILED'] } : 'PENDING') as any }, data: { status: ok ? 'SUCCESS' : 'FAILED', completedAt: new Date() } });
       if (!claim.count) return null;
       const p = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
       if (ok) {

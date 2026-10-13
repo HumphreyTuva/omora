@@ -43,7 +43,10 @@ export class MpesaService {
       });
       const d = await r.json().catch(() => ({}));
       if (d.ResultCode === undefined) { console.log('M-Pesa query: no result yet', checkoutRequestId.slice(-8), d.errorCode || r.status, d.errorMessage || ''); return { resultCode: null }; }
-      return { resultCode: Number(d.ResultCode), desc: d.ResultDesc };
+      const code = Number(d.ResultCode);
+      // 4999 = "The transaction is still under processing": the customer hasn't finished yet, so keep waiting (this is not a failure).
+      if (code === 4999 || /still under processing|being processed/i.test(String(d.ResultDesc || ''))) { console.log('M-Pesa query: still processing', checkoutRequestId.slice(-8)); return { resultCode: null }; }
+      return { resultCode: code, desc: d.ResultDesc };
     } catch (e) { console.error('M-Pesa query error', e); return { resultCode: null }; }
   }
 }
