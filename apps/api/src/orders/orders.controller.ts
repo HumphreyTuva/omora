@@ -4,7 +4,7 @@ import { ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Length, Max, 
 import { PrismaService } from '../prisma.service';
 import { NotificationsService, SmsService } from '../notifications/notifications.service';
 import { JwtGuard, Roles } from '../auth/guards';
-import { quoteDelivery } from '../logistics/providers';
+import { SettingsService } from '../settings/settings.service';
 import { validateCoupon } from '../coupons/coupons.controller';
 import { SELLER_STATUSES, canMove } from './state';
 class Line { @IsString() productId: string; @IsInt() @Min(1) @Max(20) quantity: number; }
@@ -12,14 +12,14 @@ class CreateOrder { @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) 
 class ReasonDto { @IsString() @Length(3, 300) reason: string; }
 const CUSTOMER_CANCELLABLE = ['PENDING_PAYMENT', 'PAID', 'SELLER_CONFIRMED'];
 class StatusDto { @IsIn(SELLER_STATUSES) status: string; }
-const deliveryFee = quoteDelivery;
 
 @Controller('orders') @UseGuards(JwtGuard)
 export class OrdersController {
-  constructor(private db: PrismaService, private n: NotificationsService) {}
+  constructor(private db: PrismaService, private n: NotificationsService, private settings: SettingsService) {}
 
   // One checkout, many sellers: every line becomes an OrderItem tagged with its seller + commission.
   @Post() async create(@Req() req: any, @Body() dto: CreateOrder) {
+    const cfg = await this.settings.delivery(); // delivery fee set by the admin
     return this.db.$transaction(async tx => {
       const ids = [...new Set(dto.items.map(i => i.productId))];
       const products = await tx.product.findMany({ where: { id: { in: ids }, status: 'LIVE' }, include: { category: true, seller: true } });
@@ -34,7 +34,7 @@ export class OrdersController {
         subtotal += price * l.quantity;
         items.push({ productId: p.id, sellerId: p.sellerId, quantity: l.quantity, price, commission: Math.round(price * l.quantity * rate) });
       }
-      const fee = deliveryFee(subtotal); let discount = 0, couponCode: string | undefined;
+      const fee = cfg.freeAbove > 0 && subtotal >= cfg.freeAbove ? 0 : cfg.deliveryFee; let discount = 0, couponCode: string | undefined;
       if (dto.coupon) {
         const v = await validateCoupon(tx, dto.coupon, subtotal); discount = v.discount; couponCode = v.coupon.code;
         const u = await tx.coupon.updateMany({ where: { id: v.coupon.id, ...(v.coupon.maxUses != null ? { used: { lt: v.coupon.maxUses } } : {}) }, data: { used: { increment: 1 } } });

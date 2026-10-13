@@ -1,11 +1,13 @@
 import { Body, Controller, Delete, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Req, UseGuards, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StorageService } from '../storage/storage.service';
+import { SettingsService } from '../settings/settings.service';
 import { IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 import { PrismaService } from '../prisma.service';
 import { NotificationsService, SmsService } from '../notifications/notifications.service';
 import { JwtGuard, Roles } from '../auth/guards';
 class NewProduct { @IsString() name: string; @IsString() categoryId: string; @IsString() description: string; @IsInt() @Min(1) price: number; @IsInt() @Min(0) stock: number; }
+class DeliverySettings { @IsInt() @Min(0) @Max(100000) deliveryFee: number; @IsInt() @Min(0) @Max(10000000) freeAbove: number; }
 class EditProduct {
   @IsOptional() @IsString() @Length(2, 120) name?: string;
   @IsOptional() @IsString() categoryId?: string;
@@ -17,7 +19,7 @@ class EditProduct {
 
 @Controller() @UseGuards(JwtGuard)
 export class AdminController {
-  constructor(private db: PrismaService, private n: NotificationsService, private storage: StorageService) {}
+  constructor(private db: PrismaService, private n: NotificationsService, private storage: StorageService, private appSettings: SettingsService) {}
   // Seller submits a product: goes to PENDING_REVIEW, never straight to LIVE.
   @Post('seller/products') @Roles('SELLER') async addProduct(@Req() req: any, @Body() b: NewProduct) {
     const seller = await this.db.seller.findUnique({ where: { userId: req.user.id } });
@@ -154,6 +156,8 @@ export class AdminController {
     const c = await this.db.coupon.findUnique({ where: { id } }); if (!c) throw new NotFoundException();
     return this.db.coupon.update({ where: { id }, data: { active: !c.active } });
   }
+  @Get('admin/settings') @Roles('ADMIN') getSettings() { return this.appSettings.delivery(); }
+  @Patch('admin/settings') @Roles('ADMIN') async setSettings(@Body() b: DeliverySettings) { await this.appSettings.setDelivery(b.deliveryFee, b.freeAbove); return this.appSettings.delivery(); }
   @Get('admin/overview') @Roles('ADMIN') async overview() {
     const [orders, customers, sellers, pendingSellers, pendingProducts, gmv] = await Promise.all([
       this.db.order.count(), this.db.user.count({ where: { role: 'CUSTOMER' } }), this.db.seller.count(),

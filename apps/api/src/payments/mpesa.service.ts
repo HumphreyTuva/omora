@@ -33,7 +33,7 @@ export class MpesaService {
     return d.CheckoutRequestID;
   }
   // Asks Safaricom directly what happened. resultCode: 0 = paid, other number = failed/cancelled, null = still pending/unknown.
-  async stkQuery(checkoutRequestId: string): Promise<{ resultCode: number | null }> {
+  async stkQuery(checkoutRequestId: string): Promise<{ resultCode: number | null; desc?: string }> {
     if (!this.live) return { resultCode: 0 };
     try {
       const { ts, shortcode, password } = this.creds();
@@ -42,7 +42,8 @@ export class MpesaService {
         body: JSON.stringify({ BusinessShortCode: shortcode, Password: password, Timestamp: ts, CheckoutRequestID: checkoutRequestId }),
       });
       const d = await r.json().catch(() => ({}));
-      return { resultCode: d.ResultCode === undefined ? null : Number(d.ResultCode) };
+      if (d.ResultCode === undefined) { console.log('M-Pesa query: no result yet', checkoutRequestId.slice(-8), d.errorCode || r.status, d.errorMessage || ''); return { resultCode: null }; }
+      return { resultCode: Number(d.ResultCode), desc: d.ResultDesc };
     } catch (e) { console.error('M-Pesa query error', e); return { resultCode: null }; }
   }
 }

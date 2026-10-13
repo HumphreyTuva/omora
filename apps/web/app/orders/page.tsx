@@ -12,21 +12,11 @@ function Rate({ productId, orderId }: { productId: string; orderId: string }) {
 const money = (n: number) => 'KSh ' + n.toLocaleString('en-KE');
 const label = (s: string) => s.toLowerCase().replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
 function Actions({ o, reload }: { o: any; reload: () => void }) {
-  const { token, toast } = useStore(); const st: string[] = o.items.map((i: any) => i.status);
+  const { token, toast, payOrder } = useStore(); const st: string[] = o.items.map((i: any) => i.status);
   const can = st.every(s => ['PENDING_PAYMENT', 'PAID', 'SELLER_CONFIRMED'].includes(s)), del = st.includes('DELIVERED') && !['REFUND_REQUESTED', 'REFUNDED'].includes(o.status);
   const run = async (path: string, body: unknown, msg: string) => { try { await call(path, 'POST', body, token); toast(msg); reload(); } catch (e: any) { toast(e.message); } };
-  const pay = async () => {
-    let phone = localStorage.getItem('omora-phone') || '';
-    if (!phone) { const raw = (window.prompt('Enter your M-Pesa phone number, e.g. 0712 345 678') || '').trim(); if (!raw) return; const p = normalizePhone(raw); if (!p) { toast('That phone number does not look right'); return; } phone = p; localStorage.setItem('omora-phone', phone); }
-    try {
-      await call('/payments/initiate', 'POST', { orderId: o.id, phone }, token); toast('Enter your M-Pesa PIN on your phone');
-      for (let i = 0; i < 12; i++) {
-        if (i) await new Promise(r => setTimeout(r, 5000));
-        const v = await call('/payments/verify/' + o.id, 'POST', undefined, token).catch(() => ({ paid: false })); if (v.paid) { toast('Payment confirmed ✔'); reload(); return; }
-      }
-    } catch (e: any) { toast(e.message); }
-  };
-  const check = async () => { try { const v = await call('/payments/verify/' + o.id, 'POST', undefined, token); toast(v.paid ? 'Payment confirmed ✔' : 'No payment received yet'); reload(); } catch (e: any) { toast(e.message); } };
+  const pay = () => payOrder(o.id, o.total);
+  const check = async () => { try { const v = await call('/payments/verify/' + o.id, 'POST', undefined, token); toast(v.paid ? 'Payment confirmed ✔' : v.failed ? (v.reason || 'The payment failed') : 'No payment received yet'); reload(); } catch (e: any) { toast(e.message); } };
   return <div className="acts" style={{ marginTop: 8, alignItems: 'center' }}>
     {o.status === 'PENDING_PAYMENT' && <><button className="btn sm" onClick={pay}>Pay with M-Pesa</button><button className="btn sm o2" onClick={check}>Check payment</button></>}
     {st.some(s => !['PENDING_PAYMENT', 'CANCELLED'].includes(s)) && <a className="btn sm" href={`/track/${o.id}`}>Track delivery</a>}

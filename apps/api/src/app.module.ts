@@ -13,6 +13,7 @@ import { WishlistController } from './wishlist/wishlist.controller';
 import { CouponsController } from './coupons/coupons.controller';
 import { LogisticsController } from './logistics/logistics.controller';
 import { StorageService } from './storage/storage.service';
+import { SettingsService } from './settings/settings.service';
 import { EmailService, NotificationsService, SmsService } from './notifications/notifications.service';
 import { NotificationsController } from './notifications/notifications.controller';
 import { AdminController } from './admin/admin.controller';
@@ -20,7 +21,7 @@ import { AdminController } from './admin/admin.controller';
 @Module({
   imports: [JwtModule.register({ global: true, secret: process.env.JWT_SECRET || 'dev-secret', signOptions: { expiresIn: '7d' } })],
   controllers: [AuthController, CatalogController, OrdersController, PaymentsController, AdminController, SellersController, ReviewsController, WishlistController, CouponsController, LogisticsController, NotificationsController],
-  providers: [PrismaService, AuthService, MpesaService, SmsService, EmailService, NotificationsService, StorageService],
-  exports: [PrismaService, SmsService, EmailService, NotificationsService, StorageService],
+  providers: [PrismaService, AuthService, MpesaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService],
+  exports: [PrismaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService],
 })
 export class AppModule {}

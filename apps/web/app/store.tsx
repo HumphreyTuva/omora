@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { normalizePhone } from './phone';
 export const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 export type Item = { id: string; name: string; emoji?: string; image?: string; price: number; qty: number };
+export type PayState = { phase: 'waiting' | 'success' | 'failed' | 'timeout'; orderId: string; amount: number; reason?: string };
 type Panel = '' | 'side' | 'cart' | 'login';
 export async function call(path: string, method = 'GET', body?: unknown, token?: string | null) {
   const r = await fetch(API + path, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
@@ -29,20 +30,44 @@ export function Provider({ children }: { children: React.ReactNode }) {
   const qty = (id: string, d: number) => setItems(a => a.map(i => i.id === id ? { ...i, qty: i.qty + d } : i).filter(i => i.qty > 0));
   const login = (tk: string, phone: string) => { localStorage.setItem('omora-token', tk); localStorage.setItem('omora-phone', phone); setToken(tk); setPanel(''); toast('Welcome to Omora!'); };
   const logout = () => { localStorage.removeItem('omora-token'); setToken(null); toast('Signed out'); };
+  const [pay, setPay] = useState<PayState | null>(null);
+  const askPhone = (): string | null => {
+    let phone = localStorage.getItem('omora-phone') || '';
+    if (!phone) { const raw = (window.prompt('Enter your M-Pesa phone number, e.g. 0712 345 678') || '').trim(); if (!raw) return null; const p = normalizePhone(raw); if (!p) { toast('That phone number does not look right'); return null; } phone = p; localStorage.setItem('omora-phone', phone); }
+    return phone;
+  };
+  // Sends the M-Pesa prompt, then asks the server every 5 s (up to 2 minutes) until the payment is confirmed, failed or timed out.
+  const payOrder = async (orderId: string, amount: number, phoneArg?: string) => {
+    if (!token) { setPanel('login'); return; }
+    const phone = phoneArg || askPhone(); if (!phone) return;
+    setPay({ phase: 'waiting', orderId, amount });
+    try {
+      const p = await call('/payments/initiate', 'POST', { orderId, phone }, token);
+      await call('/payments/dev/confirm/' + p.paymentId, 'POST', undefined, token).catch(() => {}); // mock mode only
+    } catch (e: any) { setPay({ phase: 'failed', orderId, amount, reason: e.message }); return; }
+    for (let i = 0; i < 24; i++) {
+      if (i) await new Promise(r => setTimeout(r, 5000));
+      const v = await call('/payments/verify/' + orderId, 'POST', undefined, token).catch(() => null);
+      if (!v) continue;
+      if (v.paid) { setPay({ phase: 'success', orderId, amount }); return; }
+      if (v.failed) { setPay({ phase: 'failed', orderId, amount, reason: v.reason }); return; }
+    }
+    setPay({ phase: 'timeout', orderId, amount });
+  };
+  const payCheck = async () => {
+    if (!pay) return;
+    try {
+      const v = await call('/payments/verify/' + pay.orderId, 'POST', undefined, token);
+      if (v.paid) setPay({ ...pay, phase: 'success' }); else if (v.failed) setPay({ ...pay, phase: 'failed', reason: v.reason }); else toast('Still waiting for the payment');
+    } catch (e: any) { toast(e.message); }
+  };
   const checkout = async (coupon?: string) => {
     if (!token) { setPanel('login'); return; }
-    let phone = localStorage.getItem('omora-phone') || '';
-    if (!phone) { const raw = (window.prompt('Enter your M-Pesa phone number, e.g. 0712 345 678') || '').trim(); if (!raw) return; const p = normalizePhone(raw); if (!p) { toast('That phone number does not look right'); return; } phone = p; localStorage.setItem('omora-phone', phone); }
+    const phone = askPhone(); if (!phone) return;
     try {
       const o = await call('/orders', 'POST', { items: items.map(i => ({ productId: i.id, quantity: i.qty })), coupon }, token);
-      const p = await call('/payments/initiate', 'POST', { orderId: o.id, phone }, token);
-      await call('/payments/dev/confirm/' + p.paymentId, 'POST', undefined, token).catch(() => {}); // mock mode only
-      setItems([]); setPanel(''); toast('Order placed 🎉 Enter your M-Pesa PIN on your phone');
-      for (let i = 0; i < 12; i++) { // ask the server if the payment went through (every 5 s, up to a minute)
-        if (i) await new Promise(r => setTimeout(r, 5000));
-        try { const v = await call('/payments/verify/' + o.id, 'POST', undefined, token); if (v.paid) { toast('Payment confirmed ✔'); return; } } catch {}
-      }
-      toast('Payment not confirmed yet. Open My Orders to retry.');
+      setItems([]); setPanel('');
+      await payOrder(o.id, o.total, phone);
     } catch (e: any) { toast(e.message); }
   };
   const toggleWish = async (id: string) => {
@@ -50,5 +75,5 @@ export function Provider({ children }: { children: React.ReactNode }) {
     try { const r = await call('/wishlist/' + id, 'POST', undefined, token); setWish(w => r.saved ? [...w, id] : w.filter(x => x !== id)); toast(r.saved ? 'Saved to wishlist ♥' : 'Removed from wishlist'); } catch (e: any) { toast(e.message); }
   };
   const count = items.reduce((a, i) => a + i.qty, 0);
-  return <Ctx.Provider value={{ unread, setUnread, wish, toggleWish, items, count, add, qty, token, panel, setPanel, msg, toast, login, logout, checkout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ pay, setPay, payOrder, payCheck, unread, setUnread, wish, toggleWish, items, count, add, qty, token, panel, setPanel, msg, toast, login, logout, checkout }}>{children}</Ctx.Provider>;
 }

@@ -256,3 +256,8 @@ model Notification {
 
   @@index([userId, read])
 }
+
+model Setting {
+  key   String @id
+  value String
+}

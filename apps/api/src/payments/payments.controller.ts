@@ -1,17 +1,35 @@
-import { BadRequestException, Body, Controller, ForbiddenException, HttpCode, NotFoundException, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, HttpCode, NotFoundException, OnModuleInit, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Transform } from 'class-transformer';
 import { IsString, Matches } from 'class-validator';
-import { normalizePhone } from '../common/phone';
 import { PrismaService } from '../prisma.service';
-import { NotificationsService, SmsService } from '../notifications/notifications.service';
-import { JwtGuard } from '../auth/guards';
+import { NotificationsService } from '../notifications/notifications.service';
+import { JwtGuard, Roles } from '../auth/guards';
+import { normalizePhone } from '../common/phone';
 import { MpesaService } from './mpesa.service';
 class InitDto { @IsString() orderId: string; @Transform(({ value }) => (typeof value === 'string' ? normalizePhone(value) ?? value : value)) @Matches(/^\+254[17]\d{8}$/, { message: 'Enter a valid Kenyan phone number, e.g. 0712 345 678' }) phone: string; }
 const ACK = { ResultCode: 0, ResultDesc: 'Accepted' }; // always answer 200 so Safaricom doesn't keep retrying
+const FRIENDLY: Record<number, string> = { 1: 'Your M-Pesa balance was not enough.', 1032: 'You cancelled the payment.', 1037: 'The M-Pesa prompt timed out. Please try again.', 2001: 'The M-Pesa PIN was wrong.' };
+const reasonFor = (code: number | null, desc?: string) => (code != null && FRIENDLY[code]) || desc || 'The payment was not completed.';
 
 @Controller('payments')
-export class PaymentsController {
+export class PaymentsController implements OnModuleInit {
   constructor(private db: PrismaService, private mpesa: MpesaService, private n: NotificationsService) {}
+
+  // Safety net: every 20 s, ask Safaricom about payments still waiting (last 20 minutes), so an order never stays unpaid
+  // just because a callback was missed (e.g. the free server was asleep) or the customer closed the page.
+  onModuleInit() {
+    if (process.env.MPESA_MODE !== 'live') return;
+    const t = setInterval(() => this.sweep().catch(e => console.error('payment sweep failed', e)), 20_000);
+    (t as any).unref?.();
+  }
+  private async sweep() {
+    const pending = await this.db.payment.findMany({ where: { status: 'PENDING', reference: { not: null }, createdAt: { gt: new Date(Date.now() - 20 * 60_000) } }, take: 20 });
+    for (const p of pending) {
+      if (Date.now() - new Date(p.createdAt).getTime() < 8000) continue;
+      const q = await this.mpesa.stkQuery(p.reference!);
+      if (q.resultCode === 0) await this.settle(p.id, true); else if (q.resultCode !== null) await this.settle(p.id, false);
+    }
+  }
 
   @Post('initiate') @UseGuards(JwtGuard) async initiate(@Req() req: any, @Body() b: InitDto) {
     const order = await this.db.order.findUnique({ where: { id: b.orderId } });
@@ -34,21 +52,39 @@ export class PaymentsController {
       const amount = Number(cb.CallbackMetadata?.Item?.find((i: any) => i.Name === 'Amount')?.Value);
       const q = await this.mpesa.stkQuery(cb.CheckoutRequestID);
       if (amount === payment.amount && q.resultCode === 0) await this.settle(payment.id, true);
+      else console.log('M-Pesa callback not settled yet', { amountOk: amount === payment.amount, query: q.resultCode }); // the 20-second sweep will retry
     } else await this.settle(payment.id, false);
     return ACK;
   }
 
-  // The website calls this after the customer pays, so a missed or delayed callback (e.g. a sleeping free server) never leaves a paid order stuck.
+  // The website calls this after the customer pays. Returns { paid } or { failed, reason } or neither (still waiting).
   @Post('verify/:orderId') @UseGuards(JwtGuard) async verify(@Req() req: any, @Param('orderId') orderId: string) {
     const order = await this.db.order.findUnique({ where: { id: orderId }, include: { payments: true } });
     if (!order || order.customerId !== req.user.id) throw new NotFoundException();
-    if (order.status !== 'PENDING_PAYMENT') return { paid: order.status !== 'CANCELLED' };
-    for (const p of order.payments.filter(x => x.status === 'PENDING' && x.reference)) {
-      const q = await this.mpesa.stkQuery(p.reference!);
-      if (q.resultCode === 0) { await this.settle(p.id, true); return { paid: true }; }
-      if (q.resultCode !== null) await this.settle(p.id, false);
+    return this.reconcile(order);
+  }
+  // Admin: re-check an unpaid order with Safaricom (for a payment that was made but the order still says Pending).
+  @Post('admin-verify/:orderId') @UseGuards(JwtGuard) @Roles('ADMIN') async adminVerify(@Param('orderId') orderId: string) {
+    const order = await this.db.order.findUnique({ where: { id: orderId }, include: { payments: true } });
+    if (!order) throw new NotFoundException();
+    return this.reconcile(order);
+  }
+  private async reconcile(order: any) {
+    if (order.status !== 'PENDING_PAYMENT') return { paid: order.status !== 'CANCELLED', failed: false };
+    const waiting = order.payments.filter((x: any) => x.status === 'PENDING' && x.reference);
+    let reason: string | undefined, sawFailure = false;
+    for (const p of waiting) {
+      const q = await this.mpesa.stkQuery(p.reference);
+      if (q.resultCode === 0) { await this.settle(p.id, true); return { paid: true, failed: false }; }
+      if (q.resultCode !== null) { await this.settle(p.id, false); sawFailure = true; reason = reasonFor(q.resultCode, q.desc); }
     }
-    return { paid: false };
+    const stillWaiting = waiting.length > 0 && !sawFailure;
+    const sorted = [...order.payments].sort((a: any, b: any) => +new Date(b.createdAt) - +new Date(a.createdAt));
+    if (!stillWaiting && (sawFailure || sorted[0]?.status === 'FAILED')) {
+      if (!reason && sorted[0]?.reference) { const q = await this.mpesa.stkQuery(sorted[0].reference); reason = reasonFor(q.resultCode, q.desc); }
+      return { paid: false, failed: true, reason: reason || 'The payment was not completed.' };
+    }
+    return { paid: false, failed: false };
   }
 
   // Local testing only (MPESA_MODE=mock): simulates the customer approving the prompt.

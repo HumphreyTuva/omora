@@ -30,6 +30,18 @@ function Login() {
   </div>);
 }
 
+function PayModal() {
+  const { pay, setPay, payOrder, payCheck } = useStore();
+  if (!pay) return null;
+  const ref = pay.orderId.slice(-8).toUpperCase(), amt = 'KSh ' + pay.amount.toLocaleString('en-KE');
+  return (<><div className="scrim on" style={{ zIndex: 95 }} /><div className="modal paybox" role="dialog" aria-live="polite" style={{ zIndex: 96 }}>
+    {pay.phase === 'waiting' && <><div className="spin" /><h3>Check your phone</h3><p>Enter your M-Pesa PIN to pay <b>{amt}</b>.</p><small>Keep this page open. We confirm your payment automatically.</small></>}
+    {pay.phase === 'success' && <><div className="tick">✓</div><h3>Payment successful</h3><p>Thank you! Your order <b>#{ref}</b> for <b>{amt}</b> is confirmed. The seller has been notified.</p><a className="btn" href="/orders">View my order</a><button className="btn o2" onClick={() => setPay(null)}>Continue shopping</button></>}
+    {pay.phase === 'failed' && <><div className="cross">✕</div><h3>Payment not completed</h3><p>{pay.reason || 'The payment did not go through.'}</p><small>Your order #{ref} is saved. You can try again now or pay later from My Orders.</small><button className="btn" onClick={() => payOrder(pay.orderId, pay.amount)}>Try again</button><button className="btn o2" onClick={() => setPay(null)}>Close</button></>}
+    {pay.phase === 'timeout' && <><div className="clock">⏳</div><h3>Still waiting for payment</h3><p>We haven’t received a confirmation for order <b>#{ref}</b> yet.</p><small>If M-Pesa already took the money, it will show on your order automatically within a few minutes.</small><button className="btn" onClick={payCheck}>Check again</button><button className="btn o2" onClick={() => setPay(null)}>Close</button></>}
+  </div></>);
+}
+
 export default function Shell({ cats }: { cats: Cat[] }) {
   const { unread, wish, items, count, qty, panel, setPanel, msg, token, logout, checkout, toast } = useStore();
   const [cfg, setCfg] = useState({ deliveryFee: 350, freeAbove: 20000 });
@@ -87,6 +99,7 @@ export default function Shell({ cats }: { cats: Cat[] }) {
     </aside>
 
     {panel === 'login' && <Login />}
+    <PayModal />
     <nav className="tab" aria-label="Main"><a href="/">🏠<span>Home</span></a><a href="/orders">📦<span>Orders</span></a>
       <a href="#" onClick={e => { e.preventDefault(); setPanel('cart'); }}>🛒<span>Cart</span>{count > 0 && <em>{count}</em>}</a>
       <a href="/notifications">🔔<span>Alerts</span>{unread > 0 && <em>{unread}</em>}</a>

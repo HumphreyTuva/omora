@@ -10,6 +10,15 @@ function Row({ c, save }: { c: any; save: (id: string, rate: number) => void }) 
     <input className="pct" type="number" min={0} max={50} step={0.5} value={v} onChange={e => setV(e.target.value)} aria-label={c.name + ' commission percent'} /><b>%</b>
     <button className="btn sm" style={{ margin: 0 }} onClick={() => save(c.id, +v / 100)}>Save</button></div></article>;
 }
+function SettingsTab({ token, toast }: any) {
+  const [f, setF] = useState({ deliveryFee: '', freeAbove: '' });
+  useEffect(() => { call('/admin/settings', 'GET', undefined, token).then(r => setF({ deliveryFee: String(r.deliveryFee), freeAbove: String(r.freeAbove) })).catch(() => {}); }, [token]);
+  const save = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/settings', 'PATCH', { deliveryFee: +f.deliveryFee, freeAbove: +f.freeAbove }, token); toast('Delivery settings saved ✔'); } catch (x: any) { toast(x.message); } };
+  return <form className="sform" style={{ maxWidth: 460 }} onSubmit={save}><h3>Delivery</h3>
+    <label>Delivery fee (KSh)<input required type="number" min={0} value={f.deliveryFee} onChange={e => setF({ ...f, deliveryFee: e.target.value })} /></label>
+    <label>Free delivery for orders above (KSh)<input required type="number" min={0} value={f.freeAbove} onChange={e => setF({ ...f, freeAbove: e.target.value })} /></label>
+    <small>Applies to new orders only. Enter 0 in the second box to charge delivery on every order.</small><button className="btn">Save</button></form>;
+}
 function CouponsTab({ list, token, toast, reload }: any) {
   const blank = { code: '', kind: 'percent', value: '', minSpend: '', maxUses: '', days: '' }, [f, setF] = useState(blank);
   const create = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/coupons', 'POST', { code: f.code, [f.kind === 'percent' ? 'percentOff' : 'amountOff']: +f.value, minSpend: f.minSpend, maxUses: f.maxUses, days: f.days }, token); toast('Coupon created ✔'); setF(blank); reload(); } catch (x: any) { toast(x.message); } };
@@ -47,9 +56,10 @@ export default function Admin() {
   useEffect(() => { if (token) load(); }, [token, load]);
   if (!token) return <main className="wrap"><div className="empty">Sign in with an admin phone number.<br /><br /><button className="btn" onClick={() => setPanel('login')}>Sign in</button></div></main>;
   if (denied) return <main className="wrap"><div className="empty">Admin access only (testing: +254700000099).</div></main>;
+  const checkPayment = async (id: string) => { try { const v = await call('/payments/admin-verify/' + id, 'POST', undefined, token); toast(v.paid ? 'Payment found, order marked paid ✔' : v.failed ? (v.reason || 'The payment failed') : 'No payment received yet'); load(); } catch (e: any) { toast(e.message); } };
   const act = async (path: string, msg: string, body?: unknown) => { try { await call(path, 'PATCH', body, token); toast(msg); load(); } catch (e: any) { toast(e.message); } };
   return (<main className="wrap"><div className="h"><h2>Omora Admin</h2>
-    <div className="tabs">{['Sellers', 'Products', 'Orders', 'Refunds', 'Payouts', 'Commissions', 'Coupons', 'Logistics'].map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}{t === 'Sellers' && o?.pendingSellers ? ` (${o.pendingSellers})` : ''}{t === 'Refunds' && refunds.length ? ` (${refunds.length})` : ''}{t === 'Products' && o?.pendingProducts ? ` (${o.pendingProducts})` : ''}</button>)}</div></div>
+    <div className="tabs">{['Sellers', 'Products', 'Orders', 'Refunds', 'Payouts', 'Commissions', 'Coupons', 'Logistics', 'Settings'].map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}{t === 'Sellers' && o?.pendingSellers ? ` (${o.pendingSellers})` : ''}{t === 'Refunds' && refunds.length ? ` (${refunds.length})` : ''}{t === 'Products' && o?.pendingProducts ? ` (${o.pendingProducts})` : ''}</button>)}</div></div>
     {o && <div className="stats" style={{ marginBottom: 18 }}>
       <div><small>Sales (GMV)</small><b>{money(o.gmv)}</b></div><div><small>Orders</small><b>{o.orders}</b></div><div><small>Customers</small><b>{o.customers}</b></div>
       <div><small>Sellers</small><b>{o.sellers}</b></div><div><small>Sellers awaiting review</small><b>{o.pendingSellers}</b></div><div><small>Products awaiting review</small><b>{o.pendingProducts}</b></div></div>}
@@ -64,7 +74,7 @@ export default function Admin() {
         <div className="acts"><button className="btn sm" onClick={() => act(`/admin/products/${p.id}/approve`, 'Product is live ✔')}>Approve</button><button className="btn sm o2" onClick={() => act(`/admin/products/${p.id}/reject`, 'Product rejected')}>Reject</button></div></article>))}</div>}
     {tab === 'Orders' && <div className="olist">{!orders.length && <div className="empty">No orders yet.</div>}{orders.map(r => (
       <article className="order" key={r.id}><div className="ohead"><div><b>#{r.id.slice(-8).toUpperCase()}</b><small>{r.customer.phone} · {new Date(r.createdAt).toLocaleDateString('en-KE')} · {r.items.length} item(s)</small></div><b className="ototal">{money(r.total)}</b></div>
-        <span className={'chip ' + r.status.toLowerCase()}>{label(r.status)}</span></article>))}</div>}
+        <span className={'chip ' + r.status.toLowerCase()}>{label(r.status)}</span>{r.status === 'PENDING_PAYMENT' && <button className="btn sm" style={{ marginLeft: 10 }} onClick={() => checkPayment(r.id)}>Check payment</button>}</article>))}</div>}
     {tab === 'Refunds' && <div className="olist">{!refunds.length && <div className="empty">No refund requests.</div>}{refunds.map(r => (
       <article className="order" key={r.id}><div className="ohead"><div><b>#{r.id.slice(-8).toUpperCase()} · {r.customer.phone}</b><small>{r.refundReason ? 'Reason: ' + r.refundReason : 'Cancelled after payment'}</small></div><b className="ototal">{money(r.total)}</b></div>
         <div className="acts"><button className="btn sm" onClick={() => confirm('Approve only after you have sent the money back to the customer. Continue?') && act(`/admin/refunds/${r.id}/approve`, 'Marked as refunded ✔')}>Approve &amp; mark refunded</button>
@@ -72,6 +82,7 @@ export default function Admin() {
     {tab === 'Commissions' && <div className="olist">{comm.map(c => <Row key={c.id} c={c} save={(id, rate) => act(`/admin/commissions/${id}`, 'Commission updated ✔', { rate })} />)}</div>}
     {tab === 'Coupons' && <CouponsTab list={coupons} token={token} toast={toast} reload={load} />}
     {tab === 'Logistics' && <LogisticsTab token={token} toast={toast} />}
+    {tab === 'Settings' && <SettingsTab token={token} toast={toast} />}
     {tab === 'Payouts' && <div className="olist">{!payouts.length && <div className="empty">No payout requests.</div>}{payouts.map(p => (
       <article className="order" key={p.id}><div className="oline"><span className="oe">💸</span><div><b>{p.seller.storeName} · {money(p.amount)}</b><small>{p.seller.user.phone}{p.reference ? ' · Ref ' + p.reference : ''}</small></div>
         <span className={'chip ' + (p.status === 'PAID' ? 'delivered' : 'paid')}>{label(p.status)}</span></div>
