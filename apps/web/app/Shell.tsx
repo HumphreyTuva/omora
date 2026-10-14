@@ -10,9 +10,10 @@ const Pin = ({ size = 24 }: { size?: number }) => <svg width={size} height={size
 const Chevron = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFC400" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>;
 const money = (n: number) => 'KSh ' + n.toLocaleString('en-KE');
 
+const PHONE_LOGIN = process.env.NEXT_PUBLIC_PHONE_LOGIN === 'true'; // turn on only when real SMS codes work
 function Login() {
   const { login, setPanel } = useStore();
-  const [mode, setMode] = useState<'phone' | 'email'>('phone'), [value, setValue] = useState(''), [code, setCode] = useState(''), [sent, setSent] = useState(false), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<'phone' | 'email'>(PHONE_LOGIN ? 'phone' : 'email'), [value, setValue] = useState(''), [code, setCode] = useState(''), [sent, setSent] = useState(false), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
   const run = async (f: () => Promise<void>) => { setBusy(true); setErr(''); try { await f(); } catch (e: any) { setErr(e.message); } setBusy(false); };
   const pick = (m: 'phone' | 'email') => { setMode(m); setValue(''); setSent(false); setCode(''); setErr(''); };
   const phoneNorm = normalizePhone(value), body = mode === 'phone' ? { phone: phoneNorm || value.trim() } : { email: value.trim().toLowerCase() };
@@ -20,7 +21,7 @@ function Login() {
     <button className="x" onClick={() => setPanel('')} aria-label="Close">✕</button>
     <img src="/logo-dark.png" alt="Omora" /><h3>Sign in to Omora</h3>
     <GoogleButton />
-    <div className="mtabs"><button className={mode === 'phone' ? 'on' : ''} onClick={() => pick('phone')}>Phone</button><button className={mode === 'email' ? 'on' : ''} onClick={() => pick('email')}>Email</button></div>
+    {PHONE_LOGIN && <div className="mtabs"><button className={mode === 'phone' ? 'on' : ''} onClick={() => pick('phone')}>Phone</button><button className={mode === 'email' ? 'on' : ''} onClick={() => pick('email')}>Email</button></div>}
     {!sent ? <><label>{mode === 'phone' ? 'Phone number (any format works)' : 'Email address'}<input value={value} onChange={e => setValue(e.target.value)} type={mode === 'email' ? 'email' : 'tel'} inputMode={mode === 'email' ? 'email' : 'tel'} placeholder={mode === 'phone' ? '0712 345 678' : 'you@example.com'} /></label>
       <button className="btn" disabled={busy} onClick={() => run(async () => { await call('/auth/otp/request', 'POST', body); setSent(true); })}>Send code</button></>
     : <><label>6-digit code sent to {mode === 'phone' ? phoneNorm || value : value}<input value={code} onChange={e => setCode(e.target.value.trim())} inputMode="numeric" maxLength={6} /></label>

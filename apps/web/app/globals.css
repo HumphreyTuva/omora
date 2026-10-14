@@ -243,3 +243,14 @@ a.ic{color:inherit}
 @keyframes spin{to{transform:rotate(360deg)}}
 .tick,.cross,.clock{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;font-size:36px;font-weight:800;animation:pop .6s var(--e)}
 .tick{background:#d6f5e0;color:#0b6b32}.cross{background:#fde0e0;color:#a01d1d}.clock{background:#fff1bf;font-size:32px}
+
+/* Footer + legal pages */
+.sitefoot{margin-top:40px}
+.fgrid3{display:grid;gap:22px;grid-template-columns:1fr}
+.fgrid3 img{height:70px;width:auto}.fgrid3 p{color:#bbb;margin-top:6px}
+.fgrid3 h4{color:#fff;margin-bottom:8px}.fgrid3 a{display:block;padding:5px 0;font-size:14px;color:#ccc}.fgrid3 a:hover{color:var(--y)}
+@media(min-width:700px){.fgrid3{grid-template-columns:1.6fr 1fr 1fr}}
+.legal{max-width:820px;margin:0 auto;padding-bottom:30px;line-height:1.65}
+.legal h1{font-size:30px;margin-bottom:6px}.legal h2{font-size:20px;margin:24px 0 6px}
+.legal ul{padding-left:20px;display:grid;gap:6px;margin:8px 0}.legal a{color:#a06c00;font-weight:600;text-decoration:underline}
+.legal .cards{display:grid;gap:12px;margin:16px 0}
