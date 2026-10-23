@@ -1,4 +1,6 @@
 import { Global, Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { RateLimitGuard } from './common/rate-limit';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 import { AuthController } from './auth/auth.controller';
@@ -21,7 +23,7 @@ import { AdminController } from './admin/admin.controller';
 @Module({
   imports: [JwtModule.register({ global: true, secret: process.env.JWT_SECRET || 'dev-secret', signOptions: { expiresIn: '7d' } })],
   controllers: [AuthController, CatalogController, OrdersController, PaymentsController, AdminController, SellersController, ReviewsController, WishlistController, CouponsController, LogisticsController, NotificationsController],
-  providers: [PrismaService, AuthService, MpesaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService],
+  providers: [PrismaService, AuthService, MpesaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService, { provide: APP_GUARD, useClass: RateLimitGuard }],
   exports: [PrismaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService],
 })
 export class AppModule {}

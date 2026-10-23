@@ -1,12 +1,19 @@
-import { Body, Controller, Delete, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Req, UseGuards, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Put, Get, NotFoundException, Param, Patch, Post, Req, UseGuards, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StorageService } from '../storage/storage.service';
 import { SettingsService } from '../settings/settings.service';
-import { IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { normalizePhone } from '../common/phone';
+import { RateLimit } from '../common/rate-limit';
+import { IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
 import { PrismaService } from '../prisma.service';
 import { NotificationsService, SmsService } from '../notifications/notifications.service';
 import { JwtGuard, Roles } from '../auth/guards';
 class NewProduct { @IsString() name: string; @IsString() categoryId: string; @IsString() description: string; @IsInt() @Min(1) price: number; @IsInt() @Min(0) stock: number; }
+class PayoutDetails {
+  @Transform(({ value }) => (typeof value === 'string' ? normalizePhone(value) ?? value : value)) @Matches(/^\+254[17]\d{8}$/, { message: 'Enter a valid M-Pesa number, e.g. 0712 345 678' }) mpesa: string;
+  @IsString() @Length(2, 80) name: string;
+}
 class DeliverySettings { @IsInt() @Min(0) @Max(100000) deliveryFee: number; @IsInt() @Min(0) @Max(10000000) freeAbove: number; }
 class EditProduct {
   @IsOptional() @IsString() @Length(2, 120) name?: string;
@@ -31,7 +38,7 @@ export class AdminController {
     if (!s) throw new ForbiddenException('No seller account'); return s;
   }
   // Up to 5 photos per product. The file is checked (type, real image header, 3 MB) before it is stored.
-  @Post('seller/products/:id/images') @Roles('SELLER') @UseInterceptors(FileInterceptor('image', { limits: { fileSize: 3 * 1024 * 1024 } }))
+  @Post('seller/products/:id/images') @Roles('SELLER') @RateLimit(40, 600) @UseInterceptors(FileInterceptor('image', { limits: { fileSize: 3 * 1024 * 1024 } }))
   async addImage(@Req() req: any, @Param('id') id: string, @UploadedFile() file: any) {
     if (!file) throw new BadRequestException('Choose an image');
     const s = await this.mySeller(req.user.id);
@@ -112,7 +119,18 @@ export class AdminController {
     const { available } = await this.earnings(req);
     if (available < 500) throw new BadRequestException('Minimum payout is KSh 500');
     const s = await this.mySeller(req.user.id);
-    return this.db.sellerPayout.create({ data: { sellerId: s.id, amount: available } });
+    if (!s.payoutMpesa || !s.payoutName) throw new BadRequestException('Add your M-Pesa payout details first');
+    // The details are copied onto the request, so changing them later cannot redirect a payout that is already waiting.
+    return this.db.sellerPayout.create({ data: { sellerId: s.id, amount: available, payoutMpesa: s.payoutMpesa, payoutName: s.payoutName } });
+  }
+  @Get('seller/payout-details') @Roles('SELLER') async getPayoutDetails(@Req() req: any) { const s = await this.mySeller(req.user.id); return { mpesa: s.payoutMpesa, name: s.payoutName }; }
+  @Put('seller/payout-details') @Roles('SELLER') @RateLimit(10, 3600) async setPayoutDetails(@Req() req: any, @Body() b: PayoutDetails) {
+    const s = await this.mySeller(req.user.id);
+    const changed = !!s.payoutMpesa && s.payoutMpesa !== b.mpesa;
+    await this.db.seller.update({ where: { id: s.id }, data: { payoutMpesa: b.mpesa, payoutName: b.name.trim() } });
+    // Safety net against account takeover: tell the seller whenever the payout number changes.
+    if (changed) await this.n.notify(req.user.id, 'Payout details changed', `Your payout number was changed to ${b.mpesa}. If this was not you, contact support now.`, '/seller', true);
+    return { mpesa: b.mpesa, name: b.name.trim() };
   }
   @Get('admin/payouts') @Roles('ADMIN') payouts() { return this.db.sellerPayout.findMany({ orderBy: { status: 'asc' }, take: 50, include: { seller: { select: { storeName: true, user: { select: { phone: true } } } } } }); }
   // Admin sends the money (e.g. M-Pesa) and records the reference here. Automated payouts come later.

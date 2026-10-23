@@ -1,5 +1,6 @@
 import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { RateLimit } from '../common/rate-limit';
 export async function validateCoupon(db: any, raw: string, subtotal: number) {
   const code = (raw || '').trim().toUpperCase();
   const c = await db.coupon.findUnique({ where: { code } });
@@ -13,7 +14,7 @@ export async function validateCoupon(db: any, raw: string, subtotal: number) {
 @Controller('coupons')
 export class CouponsController {
   constructor(private db: PrismaService) {}
-  @Get('check') async check(@Query('code') code: string, @Query('subtotal') subtotal: string) {
+  @Get('check') @RateLimit(40, 600) async check(@Query('code') code: string, @Query('subtotal') subtotal: string) {
     const { coupon, discount } = await validateCoupon(this.db, code, +subtotal || 0);
     return { code: coupon.code, discount };
   }

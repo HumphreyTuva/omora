@@ -2,9 +2,34 @@
 import ProductImage from '../ProductImage';
 import { useCallback, useEffect, useState } from 'react';
 import { API, call, useStore } from '../store';
+import { normalizePhone } from '../phone';
 const money = (n: number) => 'KSh ' + (n || 0).toLocaleString('en-KE');
 const label = (s: string) => s.toLowerCase().replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
 const NEXT: Record<string, [string, string]> = { PAID: ['SELLER_CONFIRMED', 'Confirm order'], SELLER_CONFIRMED: ['PROCESSING', 'Start processing'], PROCESSING: ['READY_FOR_PICKUP', 'Mark ready for pickup'] };
+// Where Omora sends the seller's money. Required before the first payout request.
+function PayoutBox({ available, token, toast, onRequest }: any) {
+  const [pd, setPd] = useState({ mpesa: '', name: '' }), [saved, setSaved] = useState(false), [busy, setBusy] = useState(false);
+  useEffect(() => { call('/seller/payout-details', 'GET', undefined, token).then((r: any) => { setPd({ mpesa: r.mpesa || '', name: r.name || '' }); setSaved(!!(r.mpesa && r.name)); }).catch(() => {}); }, [token]);
+  const save = async (ev: React.FormEvent) => {
+    ev.preventDefault(); const mp = normalizePhone(pd.mpesa);
+    if (!mp) { toast('Enter a valid M-Pesa number, e.g. 0712 345 678'); return; }
+    setBusy(true);
+    try { const r = await call('/seller/payout-details', 'PUT', { mpesa: mp, name: pd.name }, token); setPd(r); setSaved(true); toast('Payout details saved ✔'); } catch (x: any) { toast(x.message); }
+    setBusy(false);
+  };
+  return (<div className="sform" style={{ marginTop: 16, maxWidth: 520 }}>
+    <h3>Payout details</h3>
+    <small>Your earnings are sent to this M-Pesa number. Use a number registered in your own name.</small>
+    <form className="sform" style={{ padding: 0, boxShadow: 'none' }} onSubmit={save}>
+      <label>M-Pesa number<input required value={pd.mpesa} onChange={e => setPd({ ...pd, mpesa: e.target.value })} type="tel" inputMode="tel" placeholder="0712 345 678" /></label>
+      <label>Name registered on M-Pesa<input required minLength={2} maxLength={80} value={pd.name} onChange={e => setPd({ ...pd, name: e.target.value })} /></label>
+      <button className="btn o2" disabled={busy}>{saved ? 'Update details' : 'Save details'}</button>
+    </form>
+    <button className="btn" disabled={available < 500 || !saved} onClick={onRequest}>Request payout (KSh {(available || 0).toLocaleString('en-KE')})</button>
+    {!saved && <small>Save your payout details to request a payout.</small>}
+    {saved && available < 500 && <small>The minimum payout is KSh 500.</small>}
+  </div>);
+}
 export default function Seller() {
   const { token, setPanel, toast } = useStore();
   const [tab, setTab] = useState('Overview'), [e, setE] = useState<any>(null), [orders, setOrders] = useState<any[]>([]), [prods, setProds] = useState<any[]>([]), [cats, setCats] = useState<any[]>([]), [denied, setDenied] = useState(false);
@@ -34,7 +59,7 @@ export default function Seller() {
       <div><small>Available balance</small><b>{money(e.available)}</b></div><div><small>Pending balance</small><b>{money(e.pending)}</b></div>
       <div><small>Total sales</small><b>{money(e.sales)}</b></div><div><small>New orders to confirm</small><b>{e.orders}</b></div>
       <div><small>Omora commission paid</small><b>{money(e.commission)}</b></div><div><small>Products</small><b>{prods.length}</b></div></div>}
-    {tab === 'Overview' && e && <button className="btn" style={{ marginTop: 16 }} disabled={e.available < 500} onClick={payout}>Request payout ({money(e.available)})</button>}
+    {tab === 'Overview' && e && <PayoutBox available={e.available} token={token} toast={toast} onRequest={payout} />}
     {tab === 'Orders' && <div className="olist">{!orders.length && <div className="empty">No paid orders yet.</div>}{orders.map(i => (
       <article className="order" key={i.id}><div className="oline"><span className="oe">{i.product.emoji}</span>
         <div><b>{i.product.name}</b><small>Order #{i.order.id.slice(-8).toUpperCase()} · {i.quantity} × {money(i.price)} · You earn {money(i.price * i.quantity - i.commission)}{i.order.deliveryArea && <> · Deliver to {i.order.deliveryArea}</>}</small></div>

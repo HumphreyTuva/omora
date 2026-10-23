@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, HttpCode, NotFoundException, OnModuleInit, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, HttpCode, HttpException, HttpStatus, NotFoundException, OnModuleInit, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Transform } from 'class-transformer';
 import { IsString, Matches } from 'class-validator';
 import { PrismaService } from '../prisma.service';
@@ -6,6 +6,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { JwtGuard, Roles } from '../auth/guards';
 import { normalizePhone } from '../common/phone';
 import { MpesaService } from './mpesa.service';
+import { RateLimit } from '../common/rate-limit';
 class InitDto { @IsString() orderId: string; @Transform(({ value }) => (typeof value === 'string' ? normalizePhone(value) ?? value : value)) @Matches(/^\+254[17]\d{8}$/, { message: 'Enter a valid Kenyan phone number, e.g. 0712 345 678' }) phone: string; }
 const ACK = { ResultCode: 0, ResultDesc: 'Accepted' }; // always answer 200 so Safaricom doesn't keep retrying
 const FRIENDLY: Record<number, string> = { 1: 'Your M-Pesa balance was not enough.', 1032: 'You cancelled the payment.', 1037: 'The M-Pesa prompt timed out. Please try again.', 2001: 'The M-Pesa PIN was wrong.' };
@@ -31,10 +32,13 @@ export class PaymentsController implements OnModuleInit {
     }
   }
 
-  @Post('initiate') @UseGuards(JwtGuard) async initiate(@Req() req: any, @Body() b: InitDto) {
+  @Post('initiate') @UseGuards(JwtGuard) @RateLimit(15, 600) async initiate(@Req() req: any, @Body() b: InitDto) {
     const order = await this.db.order.findUnique({ where: { id: b.orderId } });
     if (!order || order.customerId !== req.user.id) throw new NotFoundException('Order not found');
     if (order.status !== 'PENDING_PAYMENT') throw new BadRequestException('Order is not awaiting payment');
+    // Stops anyone from triggering a stream of M-Pesa prompts to phones: at most 6 attempts per account every 10 minutes.
+    const recent = await this.db.payment.count({ where: { order: { customerId: req.user.id }, createdAt: { gt: new Date(Date.now() - 10 * 60_000) } } });
+    if (recent >= 6) throw new HttpException('Too many payment attempts. Please wait a few minutes and try again.', HttpStatus.TOO_MANY_REQUESTS);
     const reference = await this.mpesa.stkPush(b.phone, order.total, order.id);
     const payment = await this.db.payment.create({ data: { orderId: order.id, provider: 'MPESA', amount: order.total, reference } });
     return { paymentId: payment.id, message: 'Check your phone and enter your M-Pesa PIN' };

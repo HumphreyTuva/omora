@@ -92,6 +92,8 @@ model Seller {
   products           Product[]
   orderItems         OrderItem[]
   payouts            SellerPayout[]
+  payoutMpesa        String?
+  payoutName         String?
 }
 
 model Category {
@@ -210,12 +212,14 @@ model Review {
 }
 
 model SellerPayout {
-  id        String  @id @default(cuid())
-  sellerId  String
-  seller    Seller  @relation(fields: [sellerId], references: [id])
-  amount    Int
-  status    String  @default("PENDING")
-  reference String?
+  id          String  @id @default(cuid())
+  sellerId    String
+  seller      Seller  @relation(fields: [sellerId], references: [id])
+  amount      Int
+  status      String  @default("PENDING")
+  reference   String?
+  payoutMpesa String?
+  payoutName  String?
 }
 
 model WishlistItem {

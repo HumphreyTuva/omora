@@ -5,6 +5,7 @@ import { ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Length, Match
 import { PrismaService } from '../prisma.service';
 import { NotificationsService, SmsService } from '../notifications/notifications.service';
 import { JwtGuard, Roles } from '../auth/guards';
+import { RateLimit } from '../common/rate-limit';
 import { SettingsService } from '../settings/settings.service';
 import { validateCoupon } from '../coupons/coupons.controller';
 import { SELLER_STATUSES, canMove } from './state';
@@ -26,7 +27,7 @@ export class OrdersController {
   constructor(private db: PrismaService, private n: NotificationsService, private settings: SettingsService) {}
 
   // One checkout, many sellers: every line becomes an OrderItem tagged with its seller + commission.
-  @Post() async create(@Req() req: any, @Body() dto: CreateOrder) {
+  @Post() @RateLimit(20, 600) async create(@Req() req: any, @Body() dto: CreateOrder) {
     const cfg = await this.settings.delivery(); // delivery fee set by the admin
     return this.db.$transaction(async tx => {
       const ids = [...new Set(dto.items.map(i => i.productId))];

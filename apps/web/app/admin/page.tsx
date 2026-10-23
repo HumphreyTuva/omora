@@ -85,7 +85,7 @@ export default function Admin() {
     {tab === 'Logistics' && <LogisticsTab token={token} toast={toast} />}
     {tab === 'Settings' && <SettingsTab token={token} toast={toast} />}
     {tab === 'Payouts' && <div className="olist">{!payouts.length && <div className="empty">No payout requests.</div>}{payouts.map(p => (
-      <article className="order" key={p.id}><div className="oline"><span className="oe">💸</span><div><b>{p.seller.storeName} · {money(p.amount)}</b><small>{p.seller.user.phone}{p.reference ? ' · Ref ' + p.reference : ''}</small></div>
+      <article className="order" key={p.id}><div className="oline"><span className="oe">💸</span><div><b>{p.seller.storeName} · {money(p.amount)}</b><small>Send to: {p.payoutName ? `${p.payoutName} · ${p.payoutMpesa}` : `${p.seller.user.phone || 'no payout details'} (requested before payout details were required)`}{p.reference ? ' · Ref ' + p.reference : ''}</small></div>
         <span className={'chip ' + (p.status === 'PAID' ? 'delivered' : 'paid')}>{label(p.status)}</span></div>
         {p.status === 'PENDING' && <div className="acts"><button className="btn sm" onClick={() => { const ref = window.prompt('M-Pesa reference after you send the money:'); if (ref) act(`/admin/payouts/${p.id}/paid`, 'Marked as paid ✔', { reference: ref }); }}>Mark as paid</button></div>}</article>))}</div>}
   </main>);
