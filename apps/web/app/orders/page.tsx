@@ -37,6 +37,7 @@ export default function Orders() {
     <div className="olist">{orders?.map(o => (
       <article className="order" key={o.id}>
         <div className="ohead"><div><b>Order #{o.id.slice(-8).toUpperCase()}</b><small>{new Date(o.createdAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</small></div><b className="ototal">{money(o.total)}</b></div>
+        {o.deliveryAddress && <p className="addr">📍 {o.deliveryName} · {o.deliveryPhone}<br />{o.deliveryAddress}, {o.deliveryArea}{o.deliveryNotes ? ` (${o.deliveryNotes})` : ''}</p>}
         {o.items.map((i: any) => (
           <div className="oline" key={i.id}><span className="oe">{i.product.emoji}</span>
             <div><b>{i.product.name}</b><small>{i.quantity} × {money(i.price)} · Sold by {i.seller.storeName}</small>{i.status === 'DELIVERED' && <Rate productId={i.productId} orderId={o.id} />}</div>

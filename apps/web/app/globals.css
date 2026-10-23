@@ -254,3 +254,8 @@ a.ic{color:inherit}
 .legal h1{font-size:30px;margin-bottom:6px}.legal h2{font-size:20px;margin:24px 0 6px}
 .legal ul{padding-left:20px;display:grid;gap:6px;margin:8px 0}.legal a{color:#a06c00;font-weight:600;text-decoration:underline}
 .legal .cards{display:grid;gap:12px;margin:16px 0}
+
+/* Checkout details window + address lines */
+.cform{max-height:92vh;overflow-y:auto;gap:10px}
+.cform .x{position:sticky;top:0;align-self:flex-end;z-index:2}
+.addr{background:#fafaf7;border:1px solid #eee;border-radius:10px;padding:10px 12px;font-size:14px;margin:8px 0;color:#333}

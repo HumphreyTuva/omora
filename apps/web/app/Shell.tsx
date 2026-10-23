@@ -31,6 +31,39 @@ function Login() {
   </div>);
 }
 
+// Step between the cart and M-Pesa: where to deliver, and which M-Pesa number to pay from.
+function CheckoutModal({ coupon, total }: { coupon?: string; total: number }) {
+  const { token, setPanel, checkout } = useStore();
+  const [f, setF] = useState({ name: '', phone: '', area: '', address: '', notes: '', mpesa: '' }), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const saved = localStorage.getItem('omora-phone') || '';
+    call('/orders/last-address', 'GET', undefined, token).then((a: any) => setF(x => ({ ...x, name: a.name || '', phone: a.phone || '', area: a.area || '', address: a.address || '', notes: a.notes || '', mpesa: saved || a.phone || '' }))).catch(() => setF(x => ({ ...x, mpesa: saved })));
+  }, [token]);
+  const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setErr('');
+    const phone = normalizePhone(f.phone), mpesa = normalizePhone(f.mpesa || f.phone);
+    if (!phone) { setErr('Enter a valid Kenyan phone number for the delivery, e.g. 0712 345 678'); return; }
+    if (!mpesa) { setErr('Enter a valid M-Pesa number'); return; }
+    setBusy(true);
+    await checkout(coupon, { name: f.name.trim(), phone, area: f.area.trim(), address: f.address.trim(), notes: f.notes.trim() || undefined }, mpesa);
+    setBusy(false);
+  };
+  return (<form className="modal cform" role="dialog" aria-label="Delivery details" onSubmit={submit}>
+    <button type="button" className="x" onClick={() => setPanel('cart')} aria-label="Back to cart">✕</button>
+    <h3>Delivery details</h3>
+    <label>Full name<input required minLength={2} maxLength={80} value={f.name} onChange={set('name')} autoComplete="name" /></label>
+    <label>Phone for the delivery<input required value={f.phone} onChange={set('phone')} type="tel" inputMode="tel" placeholder="0712 345 678" autoComplete="tel" /></label>
+    <label>Area / town<input required minLength={2} maxLength={80} value={f.area} onChange={set('area')} placeholder="e.g. Kilimani, Nairobi" /></label>
+    <label>Street, building and house/door number<input required minLength={5} maxLength={200} value={f.address} onChange={set('address')} placeholder="e.g. Argwings Kodhek Rd, Block C, Flat 4" /></label>
+    <label>Landmark or notes (optional)<input maxLength={200} value={f.notes} onChange={set('notes')} placeholder="e.g. opposite the petrol station" /></label>
+    <label>M-Pesa number to pay from<input required value={f.mpesa} onChange={set('mpesa')} type="tel" inputMode="tel" placeholder="Same as above if you leave it" /></label>
+    {err && <p className="err">{err}</p>}
+    <button className="btn" disabled={busy}>Pay KSh {total.toLocaleString('en-KE')} with M-Pesa</button>
+    <small>We save this address for your next order. Only our delivery team sees the full address.</small>
+  </form>);
+}
+
 function PayModal() {
   const { pay, setPay, payOrder, payCheck } = useStore();
   if (!pay) return null;
@@ -96,10 +129,11 @@ export default function Shell({ cats }: { cats: Cat[] }) {
       )) : <div className="empty">🛒<br />Your cart is empty.<br /><br /><a className="btn" href="/#products" onClick={() => setPanel('')}>Start shopping</a></div>}</div>
       {items.length > 0 && <div className="df"><div className="coupon"><input value={code} onChange={e => setCode(e.target.value)} placeholder="Coupon code" aria-label="Coupon code" /><button className="btn sm" onClick={applyCode}>Apply</button></div><div className="row"><span>Subtotal</span><span>{money(sub)}</span></div><div className="row"><span>Delivery</span><span>{fee ? money(fee) : 'Free'}</span></div>
         {disc > 0 && <div className="row" style={{ color: '#18a34a' }}><span>Coupon {applied?.code}</span><span>− {money(disc)}</span></div>}<div className="row t"><span>Total</span><span>{money(sub - disc + fee)}</span></div>
-        <button className="btn" onClick={() => checkout(applied?.code)}>{token ? 'Pay with M-Pesa' : 'Sign in to checkout'}</button></div>}
+        <button className="btn" onClick={() => setPanel(token ? 'checkout' : 'login')}>{token ? 'Checkout' : 'Sign in to checkout'}</button></div>}
     </aside>
 
     {panel === 'login' && <Login />}
+    {panel === 'checkout' && <CheckoutModal coupon={applied?.code} total={sub - disc + fee} />}
     <PayModal />
     <nav className="tab" aria-label="Main"><a href="/">🏠<span>Home</span></a><a href="/orders">📦<span>Orders</span></a>
       <a href="#" onClick={e => { e.preventDefault(); setPanel('cart'); }}>🛒<span>Cart</span>{count > 0 && <em>{count}</em>}</a>

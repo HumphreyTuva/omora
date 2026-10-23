@@ -4,7 +4,7 @@ import { normalizePhone } from './phone';
 export const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 export type Item = { id: string; name: string; emoji?: string; image?: string; price: number; qty: number };
 export type PayState = { phase: 'waiting' | 'success' | 'failed' | 'timeout'; orderId: string; amount: number; reason?: string };
-type Panel = '' | 'side' | 'cart' | 'login';
+type Panel = '' | 'side' | 'cart' | 'login' | 'checkout';
 export async function call(path: string, method = 'GET', body?: unknown, token?: string | null) {
   const r = await fetch(API + path, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const d = await r.json().catch(() => ({}));
@@ -61,13 +61,14 @@ export function Provider({ children }: { children: React.ReactNode }) {
       if (v.paid) setPay({ ...pay, phase: 'success' }); else if (v.failed) setPay({ ...pay, phase: 'failed', reason: v.reason }); else toast('Still waiting for the payment');
     } catch (e: any) { toast(e.message); }
   };
-  const checkout = async (coupon?: string) => {
+  const checkout = async (coupon?: string, address?: any, phone?: string) => {
     if (!token) { setPanel('login'); return; }
-    const phone = askPhone(); if (!phone) return;
+    const mpesa = phone || askPhone(); if (!mpesa) return;
     try {
-      const o = await call('/orders', 'POST', { items: items.map(i => ({ productId: i.id, quantity: i.qty })), coupon }, token);
+      const o = await call('/orders', 'POST', { items: items.map(i => ({ productId: i.id, quantity: i.qty })), coupon, address }, token);
+      localStorage.setItem('omora-phone', mpesa);
       setItems([]); setPanel('');
-      await payOrder(o.id, o.total, phone);
+      await payOrder(o.id, o.total, mpesa);
     } catch (e: any) { toast(e.message); }
   };
   const toggleWish = async (id: string) => {

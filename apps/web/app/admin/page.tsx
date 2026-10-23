@@ -33,6 +33,7 @@ function CouponsTab({ list, token, toast, reload }: any) {
       <div><b>{c.code} · {c.percentOff ? c.percentOff + '% off' : money(c.amountOff) + ' off'}</b><small>Used {c.used}{c.maxUses ? '/' + c.maxUses : ''} · min spend {money(c.minSpend)}{c.expiresAt ? ' · expires ' + new Date(c.expiresAt).toLocaleDateString('en-KE') : ''}</small></div>
       <button className={'btn sm ' + (c.active ? 'o2' : '')} style={{ margin: 0 }} onClick={() => toggle(c.id)}>{c.active ? 'Turn off' : 'Turn on'}</button></div></article>)}</div></div>;
 }
+const addr = (o: any) => o?.deliveryAddress ? `📍 ${o.deliveryName} · ${o.deliveryPhone} · ${o.deliveryAddress}, ${o.deliveryArea}${o.deliveryNotes ? ' (' + o.deliveryNotes + ')' : ''}` : '📍 No address (order placed before addresses were required)';
 const STEP: Record<string, [string, string]> = { CREATED: ['PICKED_UP', 'Mark picked up'], PICKED_UP: ['IN_TRANSIT', 'Mark in transit'], IN_TRANSIT: ['OUT_FOR_DELIVERY', 'Out for delivery'], OUT_FOR_DELIVERY: ['DELIVERED', 'Mark delivered'] };
 function LogisticsTab({ token, toast }: any) {
   const [ready, setReady] = useState<any[]>([]), [ships, setShips] = useState<any[]>([]);
@@ -40,10 +41,10 @@ function LogisticsTab({ token, toast }: any) {
   useEffect(reload, [reload]);
   const run = async (path: string, method: string, body: unknown, msg: string) => { try { await call(path, method, body, token); toast(msg); reload(); } catch (x: any) { toast(x.message); } };
   return <div className="olist"><h3>Ready for pickup</h3>{!ready.length && <div className="empty">No orders waiting for a shipment.</div>}
-    {ready.map(o => <article className="order" key={o.id}><div className="oline"><span className="oe">📦</span><div><b>#{o.id.slice(-8).toUpperCase()}</b><small>{o.customer.phone} · {o.items.length} item(s)</small></div>
+    {ready.map(o => <article className="order" key={o.id}><div className="oline"><span className="oe">📦</span><div><b>#{o.id.slice(-8).toUpperCase()}</b><small>{o.customer.phone} · {o.items.length} item(s)</small><small>{addr(o)}</small></div>
       <button className="btn sm" style={{ margin: 0 }} onClick={() => run('/logistics/shipments', 'POST', { orderId: o.id }, 'Shipment created ✔')}>Create shipment</button></div></article>)}
     <h3 style={{ marginTop: 14 }}>Active shipments</h3>{!ships.length && <div className="empty">No active shipments.</div>}
-    {ships.map(s => <article className="order" key={s.id}><div className="oline"><span className="oe">🚚</span><div><b>{s.trackingNumber}</b><small>Order #{s.orderId.slice(-8).toUpperCase()} · {label(s.status)}</small></div>
+    {ships.map(s => <article className="order" key={s.id}><div className="oline"><span className="oe">🚚</span><div><b>{s.trackingNumber}</b><small>Order #{s.orderId.slice(-8).toUpperCase()} · {label(s.status)}</small><small>{addr(s.order)}</small></div>
       {STEP[s.status] && <button className="btn sm" style={{ margin: 0 }} onClick={() => run(`/logistics/shipments/${s.id}`, 'PATCH', { status: STEP[s.status][0] }, 'Shipment updated ✔')}>{STEP[s.status][1]}</button>}</div></article>)}</div>;
 }
 export default function Admin() {

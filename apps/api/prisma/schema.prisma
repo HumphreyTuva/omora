@@ -138,19 +138,24 @@ model ProductImage {
 }
 
 model Order {
-  id           String      @id @default(cuid())
-  customerId   String
-  customer     User        @relation(fields: [customerId], references: [id])
-  total        Int
-  deliveryFee  Int         @default(0)
-  refundReason String?
-  discount     Int         @default(0)
-  couponCode   String?
-  status       OrderStatus @default(PENDING_PAYMENT)
-  createdAt    DateTime    @default(now())
-  items        OrderItem[]
-  payments     Payment[]
-  shipments    Shipment[]
+  id              String      @id @default(cuid())
+  customerId      String
+  customer        User        @relation(fields: [customerId], references: [id])
+  total           Int
+  deliveryFee     Int         @default(0)
+  refundReason    String?
+  deliveryName    String?
+  deliveryPhone   String?
+  deliveryArea    String?
+  deliveryAddress String?
+  deliveryNotes   String?
+  discount        Int         @default(0)
+  couponCode      String?
+  status          OrderStatus @default(PENDING_PAYMENT)
+  createdAt       DateTime    @default(now())
+  items           OrderItem[]
+  payments        Payment[]
+  shipments       Shipment[]
 }
 
 model OrderItem {

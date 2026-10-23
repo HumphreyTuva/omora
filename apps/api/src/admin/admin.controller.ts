@@ -84,7 +84,7 @@ export class AdminController {
   }
   @Get('seller/orders') @Roles('SELLER') async sellerOrders(@Req() req: any) {
     const s = await this.mySeller(req.user.id);
-    return this.db.orderItem.findMany({ where: { sellerId: s.id, status: { not: 'PENDING_PAYMENT' } }, orderBy: { order: { createdAt: 'desc' } }, include: { product: { select: { name: true, emoji: true } }, order: { select: { id: true, createdAt: true } } } });
+    return this.db.orderItem.findMany({ where: { sellerId: s.id, status: { not: 'PENDING_PAYMENT' } }, orderBy: { order: { createdAt: 'desc' } }, include: { product: { select: { name: true, emoji: true } }, order: { select: { id: true, createdAt: true, deliveryArea: true } } } });
   }
   @Get('seller/products') @Roles('SELLER') async sellerProducts(@Req() req: any) {
     const s = await this.mySeller(req.user.id);

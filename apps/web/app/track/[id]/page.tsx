@@ -13,6 +13,7 @@ export default function Track({ params }: { params: { id: string } }) {
   const live = o.items.filter((i: any) => !['CANCELLED', 'REFUNDED'].includes(i.status));
   const cur = live.length ? Math.min(...live.map((i: any) => IDX[i.status] ?? 0)) : -1;
   return (<main className="wrap"><a className="back" href="/orders">‹ My orders</a><div className="h"><h2>Order #{o.id.slice(-8).toUpperCase()}</h2></div>
+    {o.deliveryAddress && <p className="addr" style={{ marginBottom: 14 }}>📍 Delivering to {o.deliveryName} · {o.deliveryPhone}<br />{o.deliveryAddress}, {o.deliveryArea}{o.deliveryNotes ? ` (${o.deliveryNotes})` : ''}</p>}
     {cur < 0 ? <div className="empty">This order was cancelled or refunded.</div> : <ol className="steps">{STEPS.map((s, i) => <li key={s} className={i < cur ? 'done' : i === cur ? 'now' : ''}><span>{i <= cur ? '✓' : i + 1}</span>{s}</li>)}</ol>}
     {o.shipments.map((s: any) => <section className="reviews" key={s.id}><h2>Shipment {s.trackingNumber}</h2>
       {s.events.map((e: any) => <div className="rv" key={e.id}><b style={{ color: 'inherit' }}>{e.status.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c: string) => c.toUpperCase())}</b><small>{new Date(e.createdAt).toLocaleString('en-KE')}</small>{e.note && <p>{e.note}</p>}</div>)}</section>)}

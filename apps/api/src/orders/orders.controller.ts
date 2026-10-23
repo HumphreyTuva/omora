@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
-import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Length, Max, Min, ValidateNested } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { normalizePhone } from '../common/phone';
+import { ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { PrismaService } from '../prisma.service';
 import { NotificationsService, SmsService } from '../notifications/notifications.service';
 import { JwtGuard, Roles } from '../auth/guards';
@@ -8,7 +9,14 @@ import { SettingsService } from '../settings/settings.service';
 import { validateCoupon } from '../coupons/coupons.controller';
 import { SELLER_STATUSES, canMove } from './state';
 class Line { @IsString() productId: string; @IsInt() @Min(1) @Max(20) quantity: number; }
-class CreateOrder { @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => Line) items: Line[]; @IsOptional() @IsString() coupon?: string; }
+class AddressDto {
+  @IsString() @Length(2, 80) name: string;
+  @Transform(({ value }) => (typeof value === 'string' ? normalizePhone(value) ?? value : value)) @Matches(/^\+254[17]\d{8}$/, { message: 'Enter a valid Kenyan phone number for delivery, e.g. 0712 345 678' }) phone: string;
+  @IsString() @Length(2, 80) area: string;
+  @IsString() @Length(5, 200) address: string;
+  @IsOptional() @IsString() @Length(0, 200) notes?: string;
+}
+class CreateOrder { @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => Line) items: Line[]; @IsOptional() @IsString() coupon?: string; @ValidateNested() @Type(() => AddressDto) address: AddressDto; }
 class ReasonDto { @IsString() @Length(3, 300) reason: string; }
 const CUSTOMER_CANCELLABLE = ['PENDING_PAYMENT', 'PAID', 'SELLER_CONFIRMED'];
 class StatusDto { @IsIn(SELLER_STATUSES) status: string; }
@@ -40,10 +48,15 @@ export class OrdersController {
         const u = await tx.coupon.updateMany({ where: { id: v.coupon.id, ...(v.coupon.maxUses != null ? { used: { lt: v.coupon.maxUses } } : {}) }, data: { used: { increment: 1 } } });
         if (!u.count) throw new BadRequestException('This coupon has been fully used');
       }
-      return tx.order.create({ data: { customerId: req.user.id, total: subtotal - discount + fee, deliveryFee: fee, discount, couponCode, items: { create: items } }, include: { items: true } });
+      return tx.order.create({ data: { customerId: req.user.id, total: subtotal - discount + fee, deliveryFee: fee, discount, couponCode, deliveryName: dto.address.name.trim(), deliveryPhone: dto.address.phone, deliveryArea: dto.address.area.trim(), deliveryAddress: dto.address.address.trim(), deliveryNotes: dto.address.notes?.trim() || null, items: { create: items } }, include: { items: true } });
     });
   }
   @Get() mine(@Req() req: any) { return this.db.order.findMany({ where: { customerId: req.user.id }, orderBy: { createdAt: 'desc' }, include: { items: { include: { product: { select: { name: true, emoji: true } }, seller: { select: { storeName: true } } } } } }); }
+  // The address from the customer's latest order, so checkout can be pre-filled next time.
+  @Get('last-address') async lastAddress(@Req() req: any) {
+    const o = await this.db.order.findFirst({ where: { customerId: req.user.id, deliveryAddress: { not: null } }, orderBy: { createdAt: 'desc' }, select: { deliveryName: true, deliveryPhone: true, deliveryArea: true, deliveryAddress: true, deliveryNotes: true } });
+    return o ? { name: o.deliveryName, phone: o.deliveryPhone, area: o.deliveryArea, address: o.deliveryAddress, notes: o.deliveryNotes } : {};
+  }
   @Get(':id') async one(@Req() req: any, @Param('id') id: string) {
     const o = await this.db.order.findUnique({ where: { id }, include: { items: true, payments: true } });
     if (!o || (o.customerId !== req.user.id && req.user.role !== 'ADMIN')) throw new NotFoundException();

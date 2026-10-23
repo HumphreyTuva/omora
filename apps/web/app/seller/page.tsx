@@ -37,7 +37,7 @@ export default function Seller() {
     {tab === 'Overview' && e && <button className="btn" style={{ marginTop: 16 }} disabled={e.available < 500} onClick={payout}>Request payout ({money(e.available)})</button>}
     {tab === 'Orders' && <div className="olist">{!orders.length && <div className="empty">No paid orders yet.</div>}{orders.map(i => (
       <article className="order" key={i.id}><div className="oline"><span className="oe">{i.product.emoji}</span>
-        <div><b>{i.product.name}</b><small>Order #{i.order.id.slice(-8).toUpperCase()} · {i.quantity} × {money(i.price)} · You earn {money(i.price * i.quantity - i.commission)}</small></div>
+        <div><b>{i.product.name}</b><small>Order #{i.order.id.slice(-8).toUpperCase()} · {i.quantity} × {money(i.price)} · You earn {money(i.price * i.quantity - i.commission)}{i.order.deliveryArea && <> · Deliver to {i.order.deliveryArea}</>}</small></div>
         <span className={'chip ' + i.status.toLowerCase()}>{label(i.status)}</span></div>
         {NEXT[i.status] && <button className="btn sm" onClick={() => move(i.id, NEXT[i.status][0])}>{NEXT[i.status][1]}</button>}</article>))}</div>}
     {tab === 'Products' && <div className="pd2">

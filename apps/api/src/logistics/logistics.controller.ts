@@ -17,7 +17,7 @@ export class LogisticsController {
     const orders = await this.db.order.findMany({ where: { shipments: { none: {} }, items: { some: { status: 'READY_FOR_PICKUP' } } }, include: { items: { select: { status: true } }, customer: { select: { phone: true } } } });
     return orders.filter(o => o.items.filter(i => !DONE.includes(i.status)).every(i => i.status === 'READY_FOR_PICKUP'));
   }
-  @Get('shipments') @Roles('ADMIN', 'LOGISTICS_AGENT') shipments() { return this.db.shipment.findMany({ where: { status: { not: 'DELIVERED' } }, orderBy: { createdAt: 'desc' } }); }
+  @Get('shipments') @Roles('ADMIN', 'LOGISTICS_AGENT') shipments() { return this.db.shipment.findMany({ where: { status: { not: 'DELIVERED' } }, orderBy: { createdAt: 'desc' }, include: { order: { select: { id: true, deliveryName: true, deliveryPhone: true, deliveryArea: true, deliveryAddress: true, deliveryNotes: true } } } }); }
   @Post('shipments') @Roles('ADMIN', 'LOGISTICS_AGENT') async create(@Body() b: CreateDto) {
     const o = await this.db.order.findUnique({ where: { id: b.orderId }, include: { items: true, shipments: true } });
     if (!o) throw new NotFoundException('Order not found');
