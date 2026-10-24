@@ -32,15 +32,17 @@ function PayoutBox({ available, token, toast, onRequest }: any) {
 }
 export default function Seller() {
   const { token, setPanel, toast } = useStore();
+  const [loadErr, setLoadErr] = useState('');
   const [tab, setTab] = useState('Overview'), [e, setE] = useState<any>(null), [orders, setOrders] = useState<any[]>([]), [prods, setProds] = useState<any[]>([]), [cats, setCats] = useState<any[]>([]), [denied, setDenied] = useState(false);
   const [f, setF] = useState({ name: '', categoryId: '', description: '', price: '', stock: '' }), [files, setFiles] = useState<File[]>([]), [tick, setTick] = useState(0);
   const load = useCallback(async () => {
     try { const [a, b, c, d] = await Promise.all([call('/seller/earnings', 'GET', undefined, token), call('/seller/orders', 'GET', undefined, token), call('/seller/products', 'GET', undefined, token), call('/categories')]); setE(a); setOrders(b); setProds(c); setCats(d); }
-    catch { setDenied(true); }
+    catch (e: any) { if (/forbidden|no seller account|unauthori[sz]ed/i.test(e.message || '')) setDenied(true); else setLoadErr(e.message || 'Something went wrong'); }
   }, [token]);
   useEffect(() => { if (token) load(); }, [token, load]);
   if (!token) return <main className="wrap"><div className="empty">Sign in with your seller phone number.<br /><br /><button className="btn" onClick={() => setPanel('login')}>Sign in</button></div></main>;
-  if (denied) return <main className="wrap"><div className="empty">This account isn’t a seller yet. <a href="/seller/apply"><b>Apply to sell</b></a> (testing seller: +254700000000).</div></main>;
+  if (denied) return <main className="wrap"><div className="empty">This account isn’t a seller yet. <a href="/seller/apply"><b>Apply to sell</b></a> </div></main>;
+  if (loadErr) return <main className="wrap"><div className="empty">Could not load the Seller Portal.<br /><small>{loadErr}</small><br /><br /><button className="btn" onClick={() => { setLoadErr(''); load(); }}>Try again</button></div></main>;
   const move = async (id: string, status: string) => { try { await call(`/orders/items/${id}/status`, 'PATCH', { status }, token); toast('Order updated ✔'); load(); } catch (x: any) { toast(x.message); } };
   const payout = async () => { try { await call('/seller/payouts', 'POST', undefined, token); toast('Payout requested ✔'); load(); } catch (x: any) { toast(x.message); } };
   const removeProduct = async (p: any) => {

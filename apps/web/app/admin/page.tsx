@@ -49,14 +49,16 @@ function LogisticsTab({ token, toast }: any) {
 }
 export default function Admin() {
   const { token, setPanel, toast } = useStore();
+  const [loadErr, setLoadErr] = useState('');
   const [tab, setTab] = useState('Sellers'), [o, setO] = useState<any>(null), [sellers, setSellers] = useState<any[]>([]), [prods, setProds] = useState<any[]>([]), [orders, setOrders] = useState<any[]>([]), [payouts, setPayouts] = useState<any[]>([]), [refunds, setRefunds] = useState<any[]>([]), [comm, setComm] = useState<any[]>([]), [coupons, setCoupons] = useState<any[]>([]), [denied, setDenied] = useState(false);
   const load = useCallback(async () => {
     try { const g = (p: string) => call(p, 'GET', undefined, token); const [a, b, c, d, p, rf, cm, cp] = await Promise.all([g('/admin/overview'), g('/admin/sellers'), g('/admin/products/pending'), g('/admin/orders'), g('/admin/payouts'), g('/admin/refunds'), g('/admin/commissions'), g('/admin/coupons')]); setCoupons(cp); setComm(cm); setRefunds(rf); setO(a); setSellers(b); setProds(c); setOrders(d); setPayouts(p); }
-    catch { setDenied(true); }
+    catch (e: any) { if (/forbidden|unauthori[sz]ed/i.test(e.message || '')) setDenied(true); else setLoadErr(e.message || 'Something went wrong'); }
   }, [token]);
   useEffect(() => { if (token) load(); }, [token, load]);
   if (!token) return <main className="wrap"><div className="empty">Sign in with an admin phone number.<br /><br /><button className="btn" onClick={() => setPanel('login')}>Sign in</button></div></main>;
-  if (denied) return <main className="wrap"><div className="empty">Admin access only (testing: +254700000099).</div></main>;
+  if (denied) return <main className="wrap"><div className="empty">Admin access only. Sign in with an admin account.</div></main>;
+  if (loadErr) return <main className="wrap"><div className="empty">Could not load the admin page.<br /><small>{loadErr}</small><br /><br /><button className="btn" onClick={() => { setLoadErr(''); load(); }}>Try again</button></div></main>;
   const checkPayment = async (id: string) => { try { const v = await call('/payments/admin-verify/' + id, 'POST', undefined, token); toast(v.paid ? 'Payment found, order marked paid ✔' : v.failed ? (v.reason || 'The payment failed') : 'No payment received yet'); load(); } catch (e: any) { toast(e.message); } };
   const act = async (path: string, msg: string, body?: unknown) => { try { await call(path, 'PATCH', body, token); toast(msg); load(); } catch (e: any) { toast(e.message); } };
   return (<main className="wrap"><div className="h"><h2>Omora Admin</h2>
