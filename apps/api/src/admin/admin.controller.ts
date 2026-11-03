@@ -5,7 +5,7 @@ import { SettingsService } from '../settings/settings.service';
 import { Transform } from 'class-transformer';
 import { normalizePhone } from '../common/phone';
 import { RateLimit } from '../common/rate-limit';
-import { IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
 import { PrismaService } from '../prisma.service';
 import { NotificationsService, SmsService } from '../notifications/notifications.service';
 import { JwtGuard, Roles } from '../auth/guards';
@@ -14,7 +14,11 @@ class PayoutDetails {
   @Transform(({ value }) => (typeof value === 'string' ? normalizePhone(value) ?? value : value)) @Matches(/^\+254[17]\d{8}$/, { message: 'Enter a valid M-Pesa number, e.g. 0712 345 678' }) mpesa: string;
   @IsString() @Length(2, 80) name: string;
 }
-class DeliverySettings { @IsInt() @Min(0) @Max(100000) deliveryFee: number; @IsInt() @Min(0) @Max(10000000) freeAbove: number; }
+class DeliverySettings {
+  @IsInt() @Min(0) @Max(100000) deliveryFee: number; @IsInt() @Min(0) @Max(10000000) freeAbove: number;
+  @IsOptional() @IsBoolean() financingEnabled?: boolean; @IsOptional() @IsNumber() @Min(1) @Max(90) depositPercent?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(20) feePercent?: number; @IsOptional() @IsString() @Length(0, 300) financingCategories?: string;
+}
 class EditProduct {
   @IsOptional() @IsString() @Length(2, 120) name?: string;
   @IsOptional() @IsString() categoryId?: string;
@@ -100,12 +104,13 @@ export class AdminController {
   // Earnings: delivered = available, paid-but-not-delivered = pending. Commission already stored per item.
   @Get('seller/earnings') @Roles('SELLER') async earnings(@Req() req: any) {
     const s = await this.mySeller(req.user.id);
-    const items = await this.db.orderItem.findMany({ where: { sellerId: s.id } });
+    const items = await this.db.orderItem.findMany({ where: { sellerId: s.id }, include: { order: { select: { financed: true, financeStatus: true } } } });
+    const held = (i: any) => !!i.order?.financed && i.order.financeStatus !== 'SETTLED'; // waiting for Baadae to pay Omora
     const net = (i: any) => i.price * i.quantity - i.commission;
     const pend = ['PAID', 'SELLER_CONFIRMED', 'PROCESSING', 'READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'];
     const sum = (f: (i: any) => boolean, g: (i: any) => number) => items.filter(f).reduce((a, i) => a + g(i), 0);
     const out = (await this.db.sellerPayout.aggregate({ _sum: { amount: true }, where: { sellerId: s.id, status: { in: ['PENDING', 'PAID'] } } }))._sum.amount ?? 0;
-    return { available: sum(i => i.status === 'DELIVERED', net) - out, pending: sum(i => pend.includes(i.status), net),
+    return { available: sum(i => i.status === 'DELIVERED' && !held(i), net) - out, pending: sum(i => pend.includes(i.status) || (i.status === 'DELIVERED' && held(i)), net),
       sales: sum(i => i.status !== 'PENDING_PAYMENT' && i.status !== 'CANCELLED', i => i.price * i.quantity), commission: sum(i => i.status === 'DELIVERED', i => i.commission),
       orders: items.filter(i => i.status === 'PAID').length };
   }
@@ -174,8 +179,42 @@ export class AdminController {
     const c = await this.db.coupon.findUnique({ where: { id } }); if (!c) throw new NotFoundException();
     return this.db.coupon.update({ where: { id }, data: { active: !c.active } });
   }
-  @Get('admin/settings') @Roles('ADMIN') getSettings() { return this.appSettings.delivery(); }
-  @Patch('admin/settings') @Roles('ADMIN') async setSettings(@Body() b: DeliverySettings) { await this.appSettings.setDelivery(b.deliveryFee, b.freeAbove); return this.appSettings.delivery(); }
+  @Get('admin/settings') @Roles('ADMIN') async getSettings() { return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing() }; }
+  @Patch('admin/settings') @Roles('ADMIN') async setSettings(@Body() b: DeliverySettings) {
+    await this.appSettings.setDelivery(b.deliveryFee, b.freeAbove);
+    if (b.financingEnabled !== undefined) await this.appSettings.setFinancing({ enabled: b.financingEnabled, depositPercent: b.depositPercent ?? 10, feePercent: b.feePercent ?? 1, categories: b.financingCategories ?? 'electronics,computers' });
+    return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing() };
+  }
+  // ---- Pay later (Baadae): the admin confirms Baadae's decision and, later, that Baadae paid Omora. ----
+  @Patch('admin/financing/:id/approve') @Roles('ADMIN') async approveFinancing(@Param('id') id: string, @Body() b: { reference?: string }) {
+    const o = await this.db.order.findUnique({ where: { id }, include: { items: { include: { seller: { select: { userId: true } } } } } });
+    if (!o || !o.financed || o.status !== 'AWAITING_FINANCING') throw new BadRequestException('This order is not waiting for financing approval');
+    await this.db.$transaction([
+      this.db.order.update({ where: { id }, data: { status: 'PAID', financeStatus: 'APPROVED', financeRef: b?.reference?.trim() || null } }),
+      this.db.orderItem.updateMany({ where: { orderId: id, status: 'PENDING_PAYMENT' }, data: { status: 'PAID' } }),
+    ]);
+    const ref = id.slice(-8).toUpperCase();
+    await this.n.notify(o.customerId, 'Financing approved', `Baadae approved your pay-later order #${ref}. The seller is preparing it.`, '/orders', true);
+    for (const uid of new Set<string>(o.items.map((i: any) => i.seller.userId as string))) await this.n.notify(uid, 'New order', `You have a new paid order #${ref} to confirm.`, '/seller');
+    return { ok: true };
+  }
+  // Declined: the goods go back on sale and the order becomes a refund request, so the deposit is returned through the normal refund screen.
+  @Patch('admin/financing/:id/decline') @Roles('ADMIN') async declineFinancing(@Param('id') id: string) {
+    const o = await this.db.order.findUnique({ where: { id }, include: { items: true } });
+    if (!o || !o.financed || o.status !== 'AWAITING_FINANCING') throw new BadRequestException('This order is not waiting for financing approval');
+    await this.db.$transaction([
+      ...o.items.map((i: any) => this.db.product.update({ where: { id: i.productId }, data: { stock: { increment: i.quantity } } })),
+      this.db.orderItem.updateMany({ where: { orderId: id }, data: { status: 'CANCELLED' } }),
+      this.db.order.update({ where: { id }, data: { status: 'REFUND_REQUESTED', financeStatus: 'DECLINED', refundReason: 'Pay-later application declined: refund the deposit.' } }),
+    ]);
+    await this.n.notify(o.customerId, 'Financing not approved', `Baadae could not approve order #${id.slice(-8).toUpperCase()}. Your deposit will be refunded. You can still buy the item by paying in full.`, '/orders', true);
+    return { ok: true };
+  }
+  @Patch('admin/financing/:id/settled') @Roles('ADMIN') async settleFinancing(@Param('id') id: string, @Body() b: { reference?: string }) {
+    const o = await this.db.order.findUnique({ where: { id } });
+    if (!o || !o.financed || o.financeStatus !== 'APPROVED') throw new BadRequestException('Only approved pay-later orders can be marked as paid by Baadae');
+    return this.db.order.update({ where: { id }, data: { financeStatus: 'SETTLED', financeSettleRef: b?.reference?.trim() || null } });
+  }
   @Get('admin/overview') @Roles('ADMIN') async overview() {
     const [orders, customers, sellers, pendingSellers, pendingProducts, gmv] = await Promise.all([
       this.db.order.count(), this.db.user.count({ where: { role: 'CUSTOMER' } }), this.db.seller.count(),

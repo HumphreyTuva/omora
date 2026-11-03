@@ -3,7 +3,7 @@ import Heart from './Heart';
 import Hero from './Hero';
 import AddButton from './AddButton';
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
-type Product = { id: string; name: string; emoji?: string; images?: { url: string }[]; price: number; salePrice?: number | null; rating: number; badge?: string | null; seller: { storeName: string } };
+type Product = { id: string; name: string; emoji?: string; images?: { url: string }[]; category?: { slug: string }; price: number; salePrice?: number | null; rating: number; badge?: string | null; seller: { storeName: string } };
 type Category = { id: string; name: string; slug: string; icon?: string };
 const money = (n: number) => 'KSh ' + n.toLocaleString('en-KE');
 async function get<T>(path: string, fallback: T): Promise<T> {
@@ -32,7 +32,7 @@ export default async function Home({ searchParams }: { searchParams: { q?: strin
             <a href={`/products/${p.id}`}><div className="pic"><ProductImage src={p.images?.[0]?.url} emoji={p.emoji} alt={p.name} /></div><h3>{p.name}</h3></a>
             <div className="meta"><span className="s">★ {p.rating}</span><span className="st">● In Stock</span></div>
             <div className="price">{money(p.salePrice ?? p.price)}{p.salePrice && <s>{money(p.price)}</s>}</div>
-            <div className="sell">{p.seller.storeName} <b>✔</b></div><AddButton p={{ id: p.id, name: p.name, emoji: p.emoji, image: p.images?.[0]?.url, price: p.salePrice ?? p.price }} /></article>
+            <div className="sell">{p.seller.storeName} <b>✔</b></div><AddButton p={{ id: p.id, name: p.name, emoji: p.emoji, image: p.images?.[0]?.url, cat: p.category?.slug, price: p.salePrice ?? p.price }} /></article>
         )) : <div className="empty">No products yet. Is the API running? (see README)</div>}</div></section>
 
       <section className="wrap promos">

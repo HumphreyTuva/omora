@@ -2,8 +2,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { normalizePhone } from './phone';
 export const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
-export type Item = { id: string; name: string; emoji?: string; image?: string; price: number; qty: number };
-export type PayState = { phase: 'waiting' | 'success' | 'failed' | 'timeout'; orderId: string; amount: number; reason?: string };
+export type Item = { id: string; name: string; emoji?: string; image?: string; cat?: string; price: number; qty: number };
+export type PayState = { phase: 'waiting' | 'success' | 'failed' | 'timeout'; orderId: string; amount: number; reason?: string; financed?: boolean };
 type Panel = '' | 'side' | 'cart' | 'login' | 'checkout';
 export async function call(path: string, method = 'GET', body?: unknown, token?: string | null) {
   const r = await fetch(API + path, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
@@ -49,7 +49,7 @@ export function Provider({ children }: { children: React.ReactNode }) {
       if (i) await new Promise(r => setTimeout(r, 5000));
       const v = await call('/payments/verify/' + orderId, 'POST', undefined, token).catch(() => null);
       if (!v) continue;
-      if (v.paid) { setPay({ phase: 'success', orderId, amount }); return; }
+      if (v.paid) { setPay({ phase: 'success', orderId, amount, financed: v.financed }); return; }
       if (v.failed) { setPay({ phase: 'failed', orderId, amount, reason: v.reason }); return; }
     }
     setPay({ phase: 'timeout', orderId, amount });
@@ -58,17 +58,17 @@ export function Provider({ children }: { children: React.ReactNode }) {
     if (!pay) return;
     try {
       const v = await call('/payments/verify/' + pay.orderId, 'POST', undefined, token);
-      if (v.paid) setPay({ ...pay, phase: 'success' }); else if (v.failed) setPay({ ...pay, phase: 'failed', reason: v.reason }); else toast('Still waiting for the payment');
+      if (v.paid) setPay({ ...pay, phase: 'success', financed: v.financed }); else if (v.failed) setPay({ ...pay, phase: 'failed', reason: v.reason }); else toast('Still waiting for the payment');
     } catch (e: any) { toast(e.message); }
   };
-  const checkout = async (coupon?: string, address?: any, phone?: string) => {
+  const checkout = async (coupon?: string, address?: any, phone?: string, financing?: boolean) => {
     if (!token) { setPanel('login'); return; }
     const mpesa = phone || askPhone(); if (!mpesa) return;
     try {
-      const o = await call('/orders', 'POST', { items: items.map(i => ({ productId: i.id, quantity: i.qty })), coupon, address }, token);
+      const o = await call('/orders', 'POST', { items: items.map(i => ({ productId: i.id, quantity: i.qty })), coupon, address, financing }, token);
       localStorage.setItem('omora-phone', mpesa);
       setItems([]); setPanel('');
-      await payOrder(o.id, o.total, mpesa);
+      await payOrder(o.id, o.financed ? o.depositAmount : o.total, mpesa); // pay-later: only the deposit goes through M-Pesa now
     } catch (e: any) { toast(e.message); }
   };
   const toggleWish = async (id: string) => {

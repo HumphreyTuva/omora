@@ -39,8 +39,9 @@ export class PaymentsController implements OnModuleInit {
     // Stops anyone from triggering a stream of M-Pesa prompts to phones: at most 6 attempts per account every 10 minutes.
     const recent = await this.db.payment.count({ where: { order: { customerId: req.user.id }, createdAt: { gt: new Date(Date.now() - 10 * 60_000) } } });
     if (recent >= 6) throw new HttpException('Too many payment attempts. Please wait a few minutes and try again.', HttpStatus.TOO_MANY_REQUESTS);
-    const reference = await this.mpesa.stkPush(b.phone, order.total, order.id);
-    const payment = await this.db.payment.create({ data: { orderId: order.id, provider: 'MPESA', amount: order.total, reference } });
+    const amount = order.financed ? (order.depositAmount ?? order.total) : order.total; // pay-later orders: only the deposit (+ delivery) is paid by M-Pesa
+    const reference = await this.mpesa.stkPush(b.phone, amount, order.id);
+    const payment = await this.db.payment.create({ data: { orderId: order.id, provider: 'MPESA', amount, reference } });
     return { paymentId: payment.id, message: 'Check your phone and enter your M-Pesa PIN' };
   }
 
@@ -74,7 +75,7 @@ export class PaymentsController implements OnModuleInit {
     return this.reconcile(order);
   }
   private async reconcile(order: any) {
-    if (order.status !== 'PENDING_PAYMENT') return { paid: order.status !== 'CANCELLED', failed: false };
+    if (order.status !== 'PENDING_PAYMENT') return { paid: order.status !== 'CANCELLED', failed: false, financed: !!order.financed };
     const live = process.env.MPESA_MODE === 'live', recent = Date.now() - 72 * 3600_000;
     const usable = (order.payments as any[]).filter(x => x.reference && !(live && String(x.reference).startsWith('MOCK-')));
     const pendings = usable.filter(x => x.status === 'PENDING');
@@ -84,7 +85,7 @@ export class PaymentsController implements OnModuleInit {
     let reason: string | undefined, sawFailure = false, stillWaiting = false;
     for (const p of toCheck) {
       const q = await this.mpesa.stkQuery(p.reference);
-      if (q.resultCode === 0) { await this.settle(p.id, true); return { paid: true, failed: false }; }
+      if (q.resultCode === 0) { await this.settle(p.id, true); return { paid: true, failed: false, financed: !!order.financed }; }
       if (q.resultCode !== null) { if (p.status === 'PENDING') await this.settle(p.id, false); sawFailure = true; reason = reasonFor(q.resultCode, q.desc); }
       else if (p.status === 'PENDING') stillWaiting = true;
     }
@@ -106,8 +107,14 @@ export class PaymentsController implements OnModuleInit {
       if (!claim.count) return null;
       const p = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
       if (ok) {
-        await tx.order.updateMany({ where: { id: p.orderId, status: 'PENDING_PAYMENT' }, data: { status: 'PAID' } });
-        await tx.orderItem.updateMany({ where: { orderId: p.orderId, status: 'PENDING_PAYMENT' }, data: { status: 'PAID' } });
+        const ord = await tx.order.findUnique({ where: { id: p.orderId } });
+        if (ord?.financed) {
+          // Pay-later: the deposit is in. Items stay hidden from sellers until the admin confirms Baadae approved the customer.
+          await tx.order.updateMany({ where: { id: p.orderId, status: 'PENDING_PAYMENT' }, data: { status: 'AWAITING_FINANCING' as any, financeStatus: 'AWAITING_APPROVAL' } });
+        } else {
+          await tx.order.updateMany({ where: { id: p.orderId, status: 'PENDING_PAYMENT' }, data: { status: 'PAID' } });
+          await tx.orderItem.updateMany({ where: { orderId: p.orderId, status: 'PENDING_PAYMENT' }, data: { status: 'PAID' } });
+        }
       }
       return p;
     });
@@ -116,6 +123,11 @@ export class PaymentsController implements OnModuleInit {
   private async notifyPaid(orderId: string) {
     const o = await this.db.order.findUnique({ where: { id: orderId }, include: { items: { include: { seller: { select: { userId: true } } } } } });
     if (!o) return; const ref = orderId.slice(-8).toUpperCase();
+    if (o.financed) {
+      await this.n.notify(o.customerId, 'Deposit received', `Your deposit for order #${ref} was received. Baadae will review your application and contact you.`, '/orders', true);
+      await this.n.notifyAdmins('Pay-later request', `Order #${ref}: deposit paid. Review the Baadae application in Admin, Orders.`, '/admin', true);
+      return;
+    }
     await this.n.notify(o.customerId, 'Payment received', `Your order #${ref} is confirmed.`, '/orders', true);
     for (const uid of new Set<string>(o.items.map((i: any) => i.seller.userId as string))) await this.n.notify(uid, 'New order', `You have a new paid order #${ref} to confirm.`, '/seller');
   }

@@ -33,6 +33,7 @@ enum ProductStatus {
 
 enum OrderStatus {
   PENDING_PAYMENT
+  AWAITING_FINANCING
   PAID
   SELLER_CONFIRMED
   PROCESSING
@@ -140,24 +141,31 @@ model ProductImage {
 }
 
 model Order {
-  id              String      @id @default(cuid())
-  customerId      String
-  customer        User        @relation(fields: [customerId], references: [id])
-  total           Int
-  deliveryFee     Int         @default(0)
-  refundReason    String?
-  deliveryName    String?
-  deliveryPhone   String?
-  deliveryArea    String?
-  deliveryAddress String?
-  deliveryNotes   String?
-  discount        Int         @default(0)
-  couponCode      String?
-  status          OrderStatus @default(PENDING_PAYMENT)
-  createdAt       DateTime    @default(now())
-  items           OrderItem[]
-  payments        Payment[]
-  shipments       Shipment[]
+  id               String      @id @default(cuid())
+  customerId       String
+  customer         User        @relation(fields: [customerId], references: [id])
+  total            Int
+  deliveryFee      Int         @default(0)
+  refundReason     String?
+  deliveryName     String?
+  deliveryPhone    String?
+  deliveryArea     String?
+  deliveryAddress  String?
+  deliveryNotes    String?
+  financed         Boolean     @default(false)
+  financeStatus    String?
+  depositAmount    Int?
+  financeAmount    Int?
+  financeFee       Int?
+  financeRef       String?
+  financeSettleRef String?
+  discount         Int         @default(0)
+  couponCode       String?
+  status           OrderStatus @default(PENDING_PAYMENT)
+  createdAt        DateTime    @default(now())
+  items            OrderItem[]
+  payments         Payment[]
+  shipments        Shipment[]
 }
 
 model OrderItem {

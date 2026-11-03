@@ -16,5 +16,5 @@ export default function Wishlist() {
       <article className="card" key={p.id}><Heart id={p.id} />
         <a href={`/products/${p.id}`}><div className="pic"><ProductImage src={p.images?.[0]?.url} emoji={p.emoji} alt={p.name} /></div><h3>{p.name}</h3></a>
         <div className="price">{money(price)}{p.salePrice && <s>{money(p.price)}</s>}</div><div className="sell">{p.seller.storeName} <b>✔</b></div>
-        <button className="add" onClick={() => add({ id: p.id, name: p.name, emoji: p.emoji, image: p.images?.[0]?.url, price })}>🛒 Add to Cart</button></article>); })}</div></main>);
+        <button className="add" onClick={() => add({ id: p.id, name: p.name, emoji: p.emoji, image: p.images?.[0]?.url, cat: p.category?.slug, price })}>🛒 Add to Cart</button></article>); })}</div></main>);
 }

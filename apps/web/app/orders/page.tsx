@@ -15,7 +15,7 @@ function Actions({ o, reload }: { o: any; reload: () => void }) {
   const { token, toast, payOrder } = useStore(); const st: string[] = o.items.map((i: any) => i.status);
   const can = st.every(s => ['PENDING_PAYMENT', 'PAID', 'SELLER_CONFIRMED'].includes(s)), del = st.includes('DELIVERED') && !['REFUND_REQUESTED', 'REFUNDED'].includes(o.status);
   const run = async (path: string, body: unknown, msg: string) => { try { await call(path, 'POST', body, token); toast(msg); reload(); } catch (e: any) { toast(e.message); } };
-  const pay = () => payOrder(o.id, o.total);
+  const pay = () => payOrder(o.id, o.financed ? o.depositAmount : o.total);
   const check = async () => { try { const v = await call('/payments/verify/' + o.id, 'POST', undefined, token); toast(v.paid ? 'Payment confirmed ✔' : v.failed ? (v.reason || 'The payment failed') : 'No payment received yet'); reload(); } catch (e: any) { toast(e.message); } };
   return <div className="acts" style={{ marginTop: 8, alignItems: 'center' }}>
     {o.status === 'PENDING_PAYMENT' && <><button className="btn sm" onClick={pay}>Pay with M-Pesa</button><button className="btn sm o2" onClick={check}>Check payment</button></>}
@@ -37,11 +37,12 @@ export default function Orders() {
     <div className="olist">{orders?.map(o => (
       <article className="order" key={o.id}>
         <div className="ohead"><div><b>Order #{o.id.slice(-8).toUpperCase()}</b><small>{new Date(o.createdAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</small></div><b className="ototal">{money(o.total)}</b></div>
+        {o.financed && <p className="addr fin">🏦 Pay later with Baadae · deposit {money(o.depositAmount)} · {money(o.financeAmount)} financed by Baadae · {o.financeStatus === 'APPROVED' || o.financeStatus === 'SETTLED' ? 'approved' : o.financeStatus === 'DECLINED' ? 'not approved (your deposit will be refunded)' : o.status === 'PENDING_PAYMENT' ? 'deposit not paid yet' : 'waiting for Baadae to approve'}</p>}
         {o.deliveryAddress && <p className="addr">📍 {o.deliveryName} · {o.deliveryPhone}<br />{o.deliveryAddress}, {o.deliveryArea}{o.deliveryNotes ? ` (${o.deliveryNotes})` : ''}</p>}
         {o.items.map((i: any) => (
           <div className="oline" key={i.id}><span className="oe">{i.product.emoji}</span>
             <div><b>{i.product.name}</b><small>{i.quantity} × {money(i.price)} · Sold by {i.seller.storeName}</small>{i.status === 'DELIVERED' && <Rate productId={i.productId} orderId={o.id} />}</div>
-            <span className={'chip ' + i.status.toLowerCase()}>{label(i.status)}</span></div>))}
+            <span className={'chip ' + (o.status === 'AWAITING_FINANCING' ? 'awaiting_financing' : i.status.toLowerCase())}>{label(o.status === 'AWAITING_FINANCING' ? 'AWAITING_FINANCING' : i.status)}</span></div>))}
         <Actions o={o} reload={reload} />
       </article>))}</div></main>);
 }

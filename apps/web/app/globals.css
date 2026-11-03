@@ -259,3 +259,12 @@ a.ic{color:inherit}
 .cform{max-height:92vh;overflow-y:auto;gap:10px}
 .cform .x{position:sticky;top:0;align-self:flex-end;z-index:2}
 .addr{background:#fafaf7;border:1px solid #eee;border-radius:10px;padding:10px 12px;font-size:14px;margin:8px 0;color:#333}
+
+/* Pay later (Baadae) */
+.chip.awaiting_financing{background:#ede7ff;color:#4b2bb0}
+.addr.fin{background:#f3efff;border-color:#d9ceff}
+.paychoice{display:grid;gap:8px}
+.paychoice .opt{display:flex;gap:10px;align-items:flex-start;border:2px solid #ddd;border-radius:12px;padding:10px 12px;cursor:pointer;font-weight:400}
+.paychoice .opt.on{border-color:var(--y);background:#fffbe8}
+.paychoice .opt input{width:auto;margin-top:4px}
+.paychoice .opt span{display:grid;gap:2px}.paychoice .opt b{font-size:14px}.paychoice .opt small{color:var(--mu);font-size:12.5px;text-align:left}

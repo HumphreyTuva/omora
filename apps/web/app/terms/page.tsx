@@ -11,6 +11,8 @@ export default function Terms() {
     <p>Prices are shown in Kenya shillings (KSh). Delivery fees are shown at checkout before you pay. An order is confirmed once your payment is received. We may cancel an order if an item is unavailable or a listing contains an obvious error, and we will refund any payment made.</p>
     <h2>Payment</h2>
     <p>Payments are made by M-Pesa. You authorise the payment by entering your M-Pesa PIN on your own phone. If a payment fails, you are not charged for the order; if money is taken but your order does not show as paid, contact us and we will resolve it.</p>
+    <h2>Pay later (financing)</h2>
+    <p>Where offered, you can choose to pay for eligible electronics with a deposit and have the balance financed by our partner, Baadae Services. Financing is subject to Baadae’s approval and to Baadae’s own terms, which Baadae will give you before you commit; repayments are owed to Baadae, not to Omora or the seller. We process your order once Baadae approves your application. If it is not approved, we refund your deposit, and you can still buy the item by paying in full.</p>
     <h2>Delivery</h2>
     <p>Delivery times are estimates and may vary. Risk in the goods passes to you when they are delivered.</p>
     <h2>Returns and refunds</h2>

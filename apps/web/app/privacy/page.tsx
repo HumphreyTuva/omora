@@ -18,7 +18,7 @@ export default function Privacy() {
       <li>To prevent fraud and misuse, and to meet legal obligations.</li>
     </ul>
     <h2>Who we share it with</h2>
-    <p>We share information only as needed to run the service: with the seller of the items you order (so they can fulfil your order), and with service providers that process data for us, including Safaricom (M-Pesa payments), Google (sign-in), our email and SMS providers, and our hosting, database and file-storage providers. We do not sell your personal information.</p>
+    <p>We share information only as needed to run the service: with the seller of the items you order (so they can fulfil your order), and with service providers that process data for us, including Safaricom (M-Pesa payments), Google (sign-in), our email and SMS providers, and our hosting, database and file-storage providers. If you choose to pay later with a financing partner (currently Baadae Services), we share the details needed to process your application, such as your name, phone number and order, with that partner, and only when you choose that option. We do not sell your personal information.</p>
     <h2>Cookies and local storage</h2>
     <p>We use your browser’s local storage to keep you signed in and to remember your cart. We do not use advertising cookies. Google may set its own cookies when you choose to sign in with Google.</p>
     <h2>How long we keep it</h2>

@@ -5,7 +5,7 @@ import { JwtGuard } from '../auth/guards';
 export class WishlistController {
   constructor(private db: PrismaService) {}
   @Get() async list(@Req() req: any) {
-    const rows = await this.db.wishlistItem.findMany({ where: { userId: req.user.id }, orderBy: { id: 'desc' }, include: { product: { include: { seller: { select: { storeName: true } }, images: { select: { url: true }, take: 1 } } } } });
+    const rows = await this.db.wishlistItem.findMany({ where: { userId: req.user.id }, orderBy: { id: 'desc' }, include: { product: { include: { seller: { select: { storeName: true } }, images: { select: { url: true }, take: 1 }, category: { select: { slug: true } } } } } });
     return rows.map(r => r.product).filter(p => p.status === 'LIVE');
   }
   // Tap the heart once to save, again to remove.

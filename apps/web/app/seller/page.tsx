@@ -19,7 +19,7 @@ function PayoutBox({ available, token, toast, onRequest }: any) {
   };
   return (<div className="sform" style={{ marginTop: 16, maxWidth: 520 }}>
     <h3>Payout details</h3>
-    <small>Your earnings are sent to this M-Pesa number. Use a number registered in your own name.</small>
+    <small>Your earnings are sent to this M-Pesa number. Use a number registered in your own name. Earnings from pay-later (Baadae) orders become available after Baadae has paid Omora.</small>
     <form className="sform" style={{ padding: 0, boxShadow: 'none' }} onSubmit={save}>
       <label>M-Pesa number<input required value={pd.mpesa} onChange={e => setPd({ ...pd, mpesa: e.target.value })} type="tel" inputMode="tel" placeholder="0712 345 678" /></label>
       <label>Name registered on M-Pesa<input required minLength={2} maxLength={80} value={pd.name} onChange={e => setPd({ ...pd, name: e.target.value })} /></label>

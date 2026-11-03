@@ -11,13 +11,19 @@ function Row({ c, save }: { c: any; save: (id: string, rate: number) => void }) 
     <button className="btn sm" style={{ margin: 0 }} onClick={() => save(c.id, +v / 100)}>Save</button></div></article>;
 }
 function SettingsTab({ token, toast }: any) {
-  const [f, setF] = useState({ deliveryFee: '', freeAbove: '' });
-  useEffect(() => { call('/admin/settings', 'GET', undefined, token).then(r => setF({ deliveryFee: String(r.deliveryFee), freeAbove: String(r.freeAbove) })).catch(() => {}); }, [token]);
-  const save = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/settings', 'PATCH', { deliveryFee: +f.deliveryFee, freeAbove: +f.freeAbove }, token); toast('Delivery settings saved ✔'); } catch (x: any) { toast(x.message); } };
+  const [f, setF] = useState({ deliveryFee: '', freeAbove: '', enabled: false, depositPercent: '10', feePercent: '1', categories: 'electronics,computers' });
+  useEffect(() => { call('/admin/settings', 'GET', undefined, token).then(r => setF({ deliveryFee: String(r.deliveryFee), freeAbove: String(r.freeAbove), enabled: !!r.financing?.enabled, depositPercent: String(r.financing?.depositPercent ?? 10), feePercent: String(r.financing?.feePercent ?? 1), categories: (r.financing?.categories || []).join(',') })).catch(() => {}); }, [token]);
+  const save = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/settings', 'PATCH', { deliveryFee: +f.deliveryFee, freeAbove: +f.freeAbove, financingEnabled: f.enabled, depositPercent: +f.depositPercent, feePercent: +f.feePercent, financingCategories: f.categories }, token); toast('Settings saved ✔'); } catch (x: any) { toast(x.message); } };
   return <form className="sform" style={{ maxWidth: 460 }} onSubmit={save}><h3>Delivery</h3>
     <label>Delivery fee (KSh)<input required type="number" min={0} value={f.deliveryFee} onChange={e => setF({ ...f, deliveryFee: e.target.value })} /></label>
     <label>Free delivery for orders above (KSh)<input required type="number" min={0} value={f.freeAbove} onChange={e => setF({ ...f, freeAbove: e.target.value })} /></label>
-    <small>Applies to new orders only. Enter 0 in the second box to charge delivery on every order.</small><button className="btn">Save</button></form>;
+    <small>Applies to new orders only. Enter 0 in the second box to charge delivery on every order.</small>
+    <h3 style={{ marginTop: 10 }}>Pay later (Baadae)</h3>
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" style={{ width: 'auto' }} checked={f.enabled} onChange={e => setF({ ...f, enabled: e.target.checked })} /> Offer “Pay later with Baadae” at checkout</label>
+    <div className="two"><label>Deposit (% of goods)<input required type="number" min={1} max={90} step="0.5" value={f.depositPercent} onChange={e => setF({ ...f, depositPercent: e.target.value })} /></label><label>Baadae fee (% of goods)<input required type="number" min={0} max={20} step="0.1" value={f.feePercent} onChange={e => setF({ ...f, feePercent: e.target.value })} /></label></div>
+    <label>Eligible category slugs<input value={f.categories} onChange={e => setF({ ...f, categories: e.target.value })} placeholder="electronics,computers" /></label>
+    <small>Keep this off until the signed agreement, Baadae’s licence and how approvals reach you are all confirmed. Customers only see the option when every item in their cart is in an eligible category.</small>
+    <button className="btn">Save</button></form>;
 }
 function CouponsTab({ list, token, toast, reload }: any) {
   const blank = { code: '', kind: 'percent', value: '', minSpend: '', maxUses: '', days: '' }, [f, setF] = useState(blank);
@@ -60,6 +66,13 @@ export default function Admin() {
   if (denied) return <main className="wrap"><div className="empty">Admin access only. Sign in with an admin account.</div></main>;
   if (loadErr) return <main className="wrap"><div className="empty">Could not load the admin page.<br /><small>{loadErr}</small><br /><br /><button className="btn" onClick={() => { setLoadErr(''); load(); }}>Try again</button></div></main>;
   const checkPayment = async (id: string) => { try { const v = await call('/payments/admin-verify/' + id, 'POST', undefined, token); toast(v.paid ? 'Payment found, order marked paid ✔' : v.failed ? (v.reason || 'The payment failed') : 'No payment received yet'); load(); } catch (e: any) { toast(e.message); } };
+  const financeAction = async (id: string, kind: 'approve' | 'decline' | 'settled') => {
+    let body: any;
+    if (kind === 'approve') { const ref = window.prompt('Baadae approval reference (optional):'); if (ref === null) return; body = { reference: ref }; }
+    if (kind === 'settled') { const ref = window.prompt('Reference of the payment you received from Baadae:'); if (!ref) return; body = { reference: ref }; }
+    if (kind === 'decline' && !window.confirm('Decline this application? The deposit then has to be refunded to the customer (see the Refunds tab).')) return;
+    try { await call(`/admin/financing/${id}/${kind}`, 'PATCH', body, token); toast(kind === 'approve' ? 'Financing approved ✔ The seller can now fulfil the order' : kind === 'decline' ? 'Declined. Refund the deposit in the Refunds tab' : 'Marked as paid by Baadae ✔'); load(); } catch (e: any) { toast(e.message); }
+  };
   const act = async (path: string, msg: string, body?: unknown) => { try { await call(path, 'PATCH', body, token); toast(msg); load(); } catch (e: any) { toast(e.message); } };
   return (<main className="wrap"><div className="h"><h2>Omora Admin</h2>
     <div className="tabs">{['Sellers', 'Products', 'Orders', 'Refunds', 'Payouts', 'Commissions', 'Coupons', 'Logistics', 'Settings'].map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}{t === 'Sellers' && o?.pendingSellers ? ` (${o.pendingSellers})` : ''}{t === 'Refunds' && refunds.length ? ` (${refunds.length})` : ''}{t === 'Products' && o?.pendingProducts ? ` (${o.pendingProducts})` : ''}</button>)}</div></div>
@@ -77,9 +90,12 @@ export default function Admin() {
         <div className="acts"><button className="btn sm" onClick={() => act(`/admin/products/${p.id}/approve`, 'Product is live ✔')}>Approve</button><button className="btn sm o2" onClick={() => act(`/admin/products/${p.id}/reject`, 'Product rejected')}>Reject</button></div></article>))}</div>}
     {tab === 'Orders' && <div className="olist">{!orders.length && <div className="empty">No orders yet.</div>}{orders.map(r => (
       <article className="order" key={r.id}><div className="ohead"><div><b>#{r.id.slice(-8).toUpperCase()}</b><small>{r.customer.phone} · {new Date(r.createdAt).toLocaleDateString('en-KE')} · {r.items.length} item(s)</small></div><b className="ototal">{money(r.total)}</b></div>
-        <span className={'chip ' + r.status.toLowerCase()}>{label(r.status)}</span>{r.status === 'PENDING_PAYMENT' && <button className="btn sm" style={{ marginLeft: 10 }} onClick={() => checkPayment(r.id)}>Check payment</button>}</article>))}</div>}
+        <span className={'chip ' + r.status.toLowerCase()}>{label(r.status)}</span>{r.status === 'PENDING_PAYMENT' && <button className="btn sm" style={{ marginLeft: 10 }} onClick={() => checkPayment(r.id)}>Check payment</button>}
+        {r.financed && <p className="addr fin">🏦 Baadae pay later: deposit {money(r.depositAmount)} · financed {money(r.financeAmount)} · Baadae fee about {money(r.financeFee)} · {r.financeStatus || 'deposit not paid'}{r.financeRef ? ' · ref ' + r.financeRef : ''}{r.financeSettleRef ? ' · Baadae paid, ref ' + r.financeSettleRef : ''}</p>}
+        {r.status === 'AWAITING_FINANCING' && <div className="acts" style={{ marginTop: 8 }}><button className="btn sm" onClick={() => financeAction(r.id, 'approve')}>Approve financing</button><button className="btn sm o2" onClick={() => financeAction(r.id, 'decline')}>Decline and refund deposit</button></div>}
+        {r.financed && r.financeStatus === 'APPROVED' && <div className="acts" style={{ marginTop: 8 }}><button className="btn sm" onClick={() => financeAction(r.id, 'settled')}>Mark Baadae paid</button></div>}</article>))}</div>}
     {tab === 'Refunds' && <div className="olist">{!refunds.length && <div className="empty">No refund requests.</div>}{refunds.map(r => (
-      <article className="order" key={r.id}><div className="ohead"><div><b>#{r.id.slice(-8).toUpperCase()} · {r.customer.phone}</b><small>{r.refundReason ? 'Reason: ' + r.refundReason : 'Cancelled after payment'}</small></div><b className="ototal">{money(r.total)}</b></div>
+      <article className="order" key={r.id}><div className="ohead"><div><b>#{r.id.slice(-8).toUpperCase()} · {r.customer.phone}</b><small>{r.refundReason ? 'Reason: ' + r.refundReason : 'Cancelled after payment'}{r.financed ? ' · Pay-later order: refund only the deposit, and tell Baadae to reverse the financing' : ''}</small></div><b className="ototal">{money(r.total)}</b></div>
         <div className="acts"><button className="btn sm" onClick={() => confirm('Approve only after you have sent the money back to the customer. Continue?') && act(`/admin/refunds/${r.id}/approve`, 'Marked as refunded ✔')}>Approve &amp; mark refunded</button>
           {r.items.some((i: any) => i.status === 'DELIVERED') && <button className="btn sm o2" onClick={() => act(`/admin/refunds/${r.id}/reject`, 'Refund rejected')}>Reject</button>}</div></article>))}</div>}
     {tab === 'Commissions' && <div className="olist">{comm.map(c => <Row key={c.id} c={c} save={(id, rate) => act(`/admin/commissions/${id}`, 'Commission updated ✔', { rate })} />)}</div>}
