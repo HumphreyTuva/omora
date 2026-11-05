@@ -64,6 +64,7 @@ model User {
   passwordHash  String?
   role          Role           @default(CUSTOMER)
   createdAt     DateTime       @default(now())
+  deletedAt     DateTime?
   seller        Seller?
   orders        Order[]
   reviews       Review[]

@@ -18,11 +18,12 @@ import { StorageService } from './storage/storage.service';
 import { SettingsService } from './settings/settings.service';
 import { EmailService, NotificationsService, SmsService } from './notifications/notifications.service';
 import { NotificationsController } from './notifications/notifications.controller';
+import { AccountController } from './account/account.controller';
 import { AdminController } from './admin/admin.controller';
 @Global()
 @Module({
   imports: [JwtModule.register({ global: true, secret: process.env.JWT_SECRET || 'dev-secret', signOptions: { expiresIn: '7d' } })],
-  controllers: [AuthController, CatalogController, OrdersController, PaymentsController, AdminController, SellersController, ReviewsController, WishlistController, CouponsController, LogisticsController, NotificationsController],
+  controllers: [AuthController, CatalogController, OrdersController, PaymentsController, AdminController, SellersController, ReviewsController, WishlistController, CouponsController, LogisticsController, NotificationsController, AccountController],
   providers: [PrismaService, AuthService, MpesaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService, { provide: APP_GUARD, useClass: RateLimitGuard }],
   exports: [PrismaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService],
 })

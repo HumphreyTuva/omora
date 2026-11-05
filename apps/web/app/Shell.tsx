@@ -87,6 +87,8 @@ export default function Shell({ cats }: { cats: Cat[] }) {
   const { unread, wish, items, count, qty, panel, setPanel, msg, token, logout, checkout, toast } = useStore();
   const [cfg, setCfg] = useState<any>({ deliveryFee: 350, freeAbove: 20000, financing: { enabled: false, depositPercent: 10, categories: [] as string[] } });
   useEffect(() => { call('/config').then(setCfg).catch(() => {}); }, []);
+  const [installEvt, setInstallEvt] = useState<any>(null); // Android Chrome offers to install Omora as an app
+  useEffect(() => { const h = (e: any) => { e.preventDefault(); setInstallEvt(e); }; window.addEventListener('beforeinstallprompt', h); return () => window.removeEventListener('beforeinstallprompt', h); }, []);
   const canFinance = !!cfg.financing?.enabled && items.length > 0 && items.every((i: any) => cfg.financing.categories.includes(i.cat)); // every cart item must be a financeable category
   const sub = items.reduce((a: number, i: any) => a + i.price * i.qty, 0), fee = !items.length ? 0 : cfg.freeAbove > 0 && sub >= cfg.freeAbove ? 0 : cfg.deliveryFee;
   const [code, setCode] = useState(''), [applied, setApplied] = useState<{ code: string; discount: number } | null>(null);
@@ -104,10 +106,12 @@ export default function Shell({ cats }: { cats: Cat[] }) {
       <nav>{nav.map((c: any, i) => <a key={c.id} href={href(c)} style={{ ['--i' as any]: i }} onClick={() => setPanel('')}><span>{c.icon || '🏠'}</span>{c.name}</a>)}</nav>
       <div className="side-foot">
         <p className="lbl">MY ACCOUNT</p>
+        {installEvt && <a href="#" style={{ ['--i' as any]: 9 }} onClick={async e => { e.preventDefault(); installEvt.prompt(); await installEvt.userChoice?.catch(() => {}); setInstallEvt(null); setPanel(''); }}><span>📲</span>Install the Omora app</a>}
         <a href="/orders" style={{ ['--i' as any]: 9 }} onClick={() => setPanel('')}><span>📦</span>My Orders</a>
         <a href="/wishlist" style={{ ['--i' as any]: 10 }} onClick={() => setPanel('')}><span>❤️</span>Wishlist{wish.length > 0 && <em>{wish.length}</em>}</a>
         <a href="/notifications" style={{ ['--i' as any]: 11 }} onClick={() => setPanel('')}><span>🔔</span>Notifications{unread > 0 && <em>{unread}</em>}</a>
         <a href="/seller" style={{ ['--i' as any]: 12 }} onClick={() => setPanel('')}><span>🏪</span>Seller Portal</a>
+        {token && <a href="/account/delete" style={{ ['--i' as any]: 12 }} onClick={() => setPanel('')}><span>🗑️</span>Delete my account</a>}
         <a href="#" className="out" style={{ ['--i' as any]: 13 }} onClick={e => { e.preventDefault(); token ? logout() : setPanel('login'); }}><span>{token ? '🚪' : '👤'}</span>{token ? 'Sign out' : 'Sign in'}</a>
       </div>
     </aside>

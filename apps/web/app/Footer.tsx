@@ -5,7 +5,7 @@ export default function Footer() {
     <div className="fgrid3">
       <div><img src="/logo-dark.png" alt="Omora All-in-One Marketplace" /><p>Everything You Need. Connected.</p></div>
       <div><h4>Shop</h4><a href="/">Home</a><a href="/orders">My orders</a><a href="/seller/apply">Become a seller</a></div>
-      <div><h4>Help &amp; legal</h4><a href="/contact">Contact us</a><a href="/privacy">Privacy policy</a><a href="/terms">Terms of use</a></div>
+      <div><h4>Help &amp; legal</h4><a href="/contact">Contact us</a><a href="/privacy">Privacy policy</a><a href="/terms">Terms of use</a><a href="/account/delete">Delete my account</a></div>
     </div>
     <div className="copy"><span>© {new Date().getFullYear()} {name}. All rights reserved.</span><span>Pay safely with M-Pesa</span></div>
   </footer>);
