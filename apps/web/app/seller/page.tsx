@@ -33,6 +33,8 @@ function PayoutBox({ available, token, toast, onRequest }: any) {
 export default function Seller() {
   const { token, setPanel, toast } = useStore();
   const [loadErr, setLoadErr] = useState('');
+  const [app, setApp] = useState<any>(null);
+  useEffect(() => { if (token) call('/sellers/application', 'GET', undefined, token).then(setApp).catch(() => {}); }, [token]);
   const [tab, setTab] = useState('Overview'), [e, setE] = useState<any>(null), [orders, setOrders] = useState<any[]>([]), [prods, setProds] = useState<any[]>([]), [cats, setCats] = useState<any[]>([]), [denied, setDenied] = useState(false);
   const [f, setF] = useState({ name: '', categoryId: '', description: '', price: '', stock: '' }), [files, setFiles] = useState<File[]>([]), [tick, setTick] = useState(0);
   const load = useCallback(async () => {
@@ -57,6 +59,10 @@ export default function Seller() {
       if (ok) toast('Submitted for review ✔'); setFiles([]); setTick(t => t + 1); setF({ name: '', categoryId: '', description: '', price: '', stock: '' }); load(); } catch (x: any) { toast(x.message); } };
   return (<main className="wrap"><div className="h"><h2>Seller Portal</h2>
     <div className="tabs">{['Overview', 'Orders', 'Products'].map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}{t === 'Orders' && e?.orders ? ` (${e.orders})` : ''}</button>)}</div></div>
+    {app && (!app.id ? <p className="addr fin">📝 Please complete your seller details and sign the Omora seller agreement. <a href="/seller/apply"><b>Start now</b></a></p>
+      : app.status === 'SUBMITTED' ? <p className="addr">⏳ Your application is being reviewed by Omora. <a href="/seller/agreement"><b>View your signed agreement</b></a></p>
+      : app.status === 'REJECTED' ? <p className="addr">❌ Your application was not approved{app.reviewNote ? ': ' + app.reviewNote : ''}. Please contact support.</p>
+      : <p className="addr">✅ Agreement signed and approved. <a href="/seller/agreement"><b>View your copy</b></a></p>)}
     {tab === 'Overview' && e && <div className="stats">
       <div><small>Available balance</small><b>{money(e.available)}</b></div><div><small>Pending balance</small><b>{money(e.pending)}</b></div>
       <div><small>Total sales</small><b>{money(e.sales)}</b></div><div><small>New orders to confirm</small><b>{e.orders}</b></div>

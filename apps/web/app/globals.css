@@ -268,3 +268,24 @@ a.ic{color:inherit}
 .paychoice .opt.on{border-color:var(--y);background:#fffbe8}
 .paychoice .opt input{width:auto;margin-top:4px}
 .paychoice .opt span{display:grid;gap:2px}.paychoice .opt b{font-size:14px}.paychoice .opt small{color:var(--mu);font-size:12.5px;text-align:left}
+
+/* Product photo viewer */
+.gal{touch-action:pan-y}
+.gal-arr{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;background:#000a;color:#fff;font-size:24px;line-height:1;display:grid;place-items:center;z-index:2}
+.gal-arr.l{left:10px}.gal-arr.r{right:10px}.gal-arr:hover{background:var(--y);color:#000}
+.gal-count{position:absolute;bottom:10px;right:12px;background:#000a;color:#fff;font-size:12px;padding:3px 9px;border-radius:20px;z-index:2}
+.thumbs button{padding:0;border:0;background:none;cursor:pointer;border-radius:8px}
+.thumbs button.on img{border-color:var(--y)}.thumbs button:hover img{border-color:#ccc}.thumbs button.on:hover img{border-color:var(--y)}
+
+/* Seller onboarding */
+.wsteps{list-style:none;padding:0;display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
+.wsteps li{display:flex;align-items:center;gap:8px;font-weight:600;color:#999;font-size:14px}
+.wsteps li span{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#eee;font-size:13px}
+.wsteps li.now{color:var(--tx)}.wsteps li.now span{background:var(--k);color:var(--y)}.wsteps li.done span{background:var(--y);color:#000}
+.plans{display:grid;gap:10px}
+.plan{display:flex;gap:10px;align-items:flex-start;border:2px solid #ddd;border-radius:12px;padding:12px;cursor:pointer;font-weight:400}
+.plan.on{border-color:var(--y);background:#fffbe8}.plan input{width:auto;margin-top:4px}
+.plan span{display:grid;gap:2px}.plan small{color:var(--mu)}
+.agree-box{max-height:360px;overflow:auto;border:1px solid #ddd;border-radius:12px;padding:14px;background:#fafaf7;white-space:pre-wrap;font:inherit;font-size:13.5px;line-height:1.55}
+.chk2{display:flex!important;gap:10px;align-items:flex-start;font-weight:400!important}.chk2 input{width:auto!important;margin-top:3px}
+@media print{.top,.tab,.foot,.back,.btn{display:none!important}.agree-box{max-height:none;border:0}}

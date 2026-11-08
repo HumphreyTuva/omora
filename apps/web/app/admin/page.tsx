@@ -25,6 +25,29 @@ function SettingsTab({ token, toast }: any) {
     <small>Keep this off until the signed agreement, Baadae’s licence and how approvals reach you are all confirmed. Customers only see the option when every item in their cart is in an eligible category.</small>
     <button className="btn">Save</button></form>;
 }
+function ApplicationsTab({ token, toast }: any) {
+  const [list, setList] = useState<any[]>([]), [open, setOpen] = useState('');
+  const load = useCallback(() => { call('/admin/applications', 'GET', undefined, token).then(setList).catch(() => {}); }, [token]);
+  useEffect(load, [load]);
+  const act = async (id: string, kind: 'approve' | 'reject') => {
+    let body: any;
+    if (kind === 'reject') { const note = window.prompt('Reason for rejecting (the seller will see this):'); if (note === null) return; body = { note }; }
+    else if (!window.confirm('Approve this seller and countersign the agreement for Omora?')) return;
+    try { await call(`/admin/applications/${id}/${kind}`, 'PATCH', body, token); toast(kind === 'approve' ? 'Approved and countersigned ✔' : 'Application rejected'); load(); } catch (e: any) { toast(e.message); }
+  };
+  return <div className="olist">{!list.length && <div className="empty">No seller applications yet.</div>}{list.map(a => (
+    <article className="order" key={a.id}>
+      <div className="ohead"><div><b>{a.seller.storeName}</b><small>{a.legalName} · {label(a.plan)} plan · agreement v{a.agreementVersion}</small></div><span className={'chip ' + (a.status === 'APPROVED' ? 'delivered' : a.status === 'REJECTED' ? 'cancelled' : 'paid')}>{label(a.status)}</span></div>
+      <p className="addr">ID / registration: {a.idNumber} · KRA PIN: {a.kraPin}<br />{a.phone} · {a.email} · Contact: {a.contactPerson}<br />{a.address}, {a.county}<br />Sells: {a.categories}</p>
+      <p className="addr fin">✍️ Signed by {a.signedName}, {a.signedTitle} on {new Date(a.signedAt).toLocaleString('en-KE')} · IP {a.signedIp || 'n/a'} · confirmed with a one-time code</p>
+      {a.status === 'REJECTED' && a.reviewNote && <p className="addr">Rejection reason: {a.reviewNote}</p>}
+      <div className="acts" style={{ marginTop: 8 }}>
+        {a.status !== 'APPROVED' && <button className="btn sm" onClick={() => act(a.id, 'approve')}>Approve and countersign</button>}
+        {a.status === 'SUBMITTED' && <button className="btn sm o2" onClick={() => act(a.id, 'reject')}>Reject</button>}
+        <button className="btn sm o2" onClick={() => setOpen(open === a.id ? '' : a.id)}>{open === a.id ? 'Hide agreement' : 'View agreement'}</button></div>
+      {open === a.id && <pre className="agree-box">{a.agreementText}</pre>}
+    </article>))}</div>;
+}
 function CouponsTab({ list, token, toast, reload }: any) {
   const blank = { code: '', kind: 'percent', value: '', minSpend: '', maxUses: '', days: '' }, [f, setF] = useState(blank);
   const create = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/coupons', 'POST', { code: f.code, [f.kind === 'percent' ? 'percentOff' : 'amountOff']: +f.value, minSpend: f.minSpend, maxUses: f.maxUses, days: f.days }, token); toast('Coupon created ✔'); setF(blank); reload(); } catch (x: any) { toast(x.message); } };
@@ -75,7 +98,7 @@ export default function Admin() {
   };
   const act = async (path: string, msg: string, body?: unknown) => { try { await call(path, 'PATCH', body, token); toast(msg); load(); } catch (e: any) { toast(e.message); } };
   return (<main className="wrap"><div className="h"><h2>Omora Admin</h2>
-    <div className="tabs">{['Sellers', 'Products', 'Orders', 'Refunds', 'Payouts', 'Commissions', 'Coupons', 'Logistics', 'Settings'].map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}{t === 'Sellers' && o?.pendingSellers ? ` (${o.pendingSellers})` : ''}{t === 'Refunds' && refunds.length ? ` (${refunds.length})` : ''}{t === 'Products' && o?.pendingProducts ? ` (${o.pendingProducts})` : ''}</button>)}</div></div>
+    <div className="tabs">{['Sellers', 'Products', 'Orders', 'Refunds', 'Payouts', 'Commissions', 'Coupons', 'Logistics', 'Settings', 'Applications'].map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}{t === 'Sellers' && o?.pendingSellers ? ` (${o.pendingSellers})` : ''}{t === 'Refunds' && refunds.length ? ` (${refunds.length})` : ''}{t === 'Products' && o?.pendingProducts ? ` (${o.pendingProducts})` : ''}</button>)}</div></div>
     {o && <div className="stats" style={{ marginBottom: 18 }}>
       <div><small>Sales (GMV)</small><b>{money(o.gmv)}</b></div><div><small>Orders</small><b>{o.orders}</b></div><div><small>Customers</small><b>{o.customers}</b></div>
       <div><small>Sellers</small><b>{o.sellers}</b></div><div><small>Sellers awaiting review</small><b>{o.pendingSellers}</b></div><div><small>Products awaiting review</small><b>{o.pendingProducts}</b></div></div>}
@@ -102,6 +125,7 @@ export default function Admin() {
     {tab === 'Coupons' && <CouponsTab list={coupons} token={token} toast={toast} reload={load} />}
     {tab === 'Logistics' && <LogisticsTab token={token} toast={toast} />}
     {tab === 'Settings' && <SettingsTab token={token} toast={toast} />}
+    {tab === 'Applications' && <ApplicationsTab token={token} toast={toast} />}
     {tab === 'Payouts' && <div className="olist">{!payouts.length && <div className="empty">No payout requests.</div>}{payouts.map(p => (
       <article className="order" key={p.id}><div className="oline"><span className="oe">💸</span><div><b>{p.seller.storeName} · {money(p.amount)}</b><small>Send to: {p.payoutName ? `${p.payoutName} · ${p.payoutMpesa}` : `${p.seller.user.phone || 'no payout details'} (requested before payout details were required)`}{p.reference ? ' · Ref ' + p.reference : ''}</small></div>
         <span className={'chip ' + (p.status === 'PAID' ? 'delivered' : 'paid')}>{label(p.status)}</span></div>

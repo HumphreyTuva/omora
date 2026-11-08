@@ -84,16 +84,17 @@ model Otp {
 }
 
 model Seller {
-  id                 String         @id @default(cuid())
-  userId             String         @unique
-  user               User           @relation(fields: [userId], references: [id])
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id])
   storeName          String
-  status             SellerStatus   @default(PENDING_VERIFICATION)
-  rating             Float          @default(0)
+  status             SellerStatus       @default(PENDING_VERIFICATION)
+  rating             Float              @default(0)
   commissionOverride Float?
   products           Product[]
   orderItems         OrderItem[]
   payouts            SellerPayout[]
+  application        SellerApplication?
   payoutMpesa        String?
   payoutName         String?
 }
@@ -278,4 +279,32 @@ model Notification {
 model Setting {
   key   String @id
   value String
+}
+
+model SellerApplication {
+  id               String    @id @default(cuid())
+  sellerId         String    @unique
+  seller           Seller    @relation(fields: [sellerId], references: [id])
+  legalName        String
+  idNumber         String
+  kraPin           String
+  address          String
+  county           String
+  phone            String
+  email            String
+  contactPerson    String
+  categories       String
+  plan             String
+  agreementVersion String
+  agreementText    String
+  signedName       String
+  signedTitle      String
+  signedAt         DateTime  @default(now())
+  signedIp         String?
+  signedUserAgent  String?
+  status           String    @default("SUBMITTED")
+  reviewNote       String?
+  reviewedAt       DateTime?
+  countersignedBy  String?
+  createdAt        DateTime  @default(now())
 }

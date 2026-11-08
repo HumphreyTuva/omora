@@ -215,6 +215,30 @@ export class AdminController {
     if (!o || !o.financed || o.financeStatus !== 'APPROVED') throw new BadRequestException('Only approved pay-later orders can be marked as paid by Baadae');
     return this.db.order.update({ where: { id }, data: { financeStatus: 'SETTLED', financeSettleRef: b?.reference?.trim() || null } });
   }
+  // ---- Seller applications: the admin reviews the details and the signed agreement, then approves (counter-signs for Omora) or rejects. ----
+  @Get('admin/applications') @Roles('ADMIN') applications() { return this.db.sellerApplication.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { seller: { select: { storeName: true, status: true } } } }); }
+  @Patch('admin/applications/:id/approve') @Roles('ADMIN') async approveApplication(@Req() req: any, @Param('id') id: string) {
+    const a: any = await this.db.sellerApplication.findUnique({ where: { id }, include: { seller: true } });
+    if (!a) throw new NotFoundException();
+    if (a.status === 'APPROVED') throw new BadRequestException('Already approved');
+    await this.db.$transaction([
+      this.db.sellerApplication.update({ where: { id }, data: { status: 'APPROVED', reviewedAt: new Date(), reviewNote: null, countersignedBy: req.user.id } }),
+      this.db.seller.update({ where: { id: a.sellerId }, data: { status: 'VERIFIED' } }),
+    ]);
+    await this.n.notify(a.seller.userId, 'Seller application approved', 'Your Omora seller account is active and the agreement is countersigned. You can now list products.', '/seller', true);
+    return { ok: true };
+  }
+  @Patch('admin/applications/:id/reject') @Roles('ADMIN') async rejectApplication(@Param('id') id: string, @Body() b: { note?: string }) {
+    const a: any = await this.db.sellerApplication.findUnique({ where: { id }, include: { seller: true } });
+    if (!a) throw new NotFoundException();
+    const note = (b?.note || '').trim().slice(0, 300) || null;
+    await this.db.$transaction([
+      this.db.sellerApplication.update({ where: { id }, data: { status: 'REJECTED', reviewedAt: new Date(), reviewNote: note } }),
+      ...(a.seller.status === 'PENDING_VERIFICATION' ? [this.db.seller.update({ where: { id: a.sellerId }, data: { status: 'REJECTED' } })] : []),
+    ]);
+    await this.n.notify(a.seller.userId, 'Seller application not approved', note ? `Reason: ${note}` : 'Please contact support for details.', '/seller', true);
+    return { ok: true };
+  }
   @Get('admin/overview') @Roles('ADMIN') async overview() {
     const [orders, customers, sellers, pendingSellers, pendingProducts, gmv] = await Promise.all([
       this.db.order.count(), this.db.user.count({ where: { role: 'CUSTOMER' } }), this.db.seller.count(),
