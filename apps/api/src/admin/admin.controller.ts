@@ -2,6 +2,7 @@ import { Body, Controller, Delete, ForbiddenException, Put, Get, NotFoundExcepti
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StorageService } from '../storage/storage.service';
 import { SettingsService } from '../settings/settings.service';
+import { FinancingService } from '../financing/financing.service';
 import { Transform } from 'class-transformer';
 import { normalizePhone } from '../common/phone';
 import { RateLimit } from '../common/rate-limit';
@@ -17,7 +18,7 @@ class PayoutDetails {
 class DeliverySettings {
   @IsInt() @Min(0) @Max(100000) deliveryFee: number; @IsInt() @Min(0) @Max(10000000) freeAbove: number;
   @IsOptional() @IsBoolean() financingEnabled?: boolean; @IsOptional() @IsNumber() @Min(1) @Max(90) depositPercent?: number;
-  @IsOptional() @IsNumber() @Min(0) @Max(20) feePercent?: number; @IsOptional() @IsString() @Length(0, 300) financingCategories?: string;
+  @IsOptional() @IsNumber() @Min(0) @Max(20) feePercent?: number; @IsOptional() @IsString() @Length(0, 300) financingCategories?: string; @IsOptional() @IsString() @Length(0, 200) partnerContact?: string;
 }
 class EditProduct {
   @IsOptional() @IsString() @Length(2, 120) name?: string;
@@ -30,7 +31,7 @@ class EditProduct {
 
 @Controller() @UseGuards(JwtGuard)
 export class AdminController {
-  constructor(private db: PrismaService, private n: NotificationsService, private storage: StorageService, private appSettings: SettingsService) {}
+  constructor(private db: PrismaService, private n: NotificationsService, private storage: StorageService, private appSettings: SettingsService, private fin: FinancingService) {}
   // Seller submits a product: goes to PENDING_REVIEW, never straight to LIVE.
   @Post('seller/products') @Roles('SELLER') async addProduct(@Req() req: any, @Body() b: NewProduct) {
     const seller = await this.db.seller.findUnique({ where: { userId: req.user.id } });
@@ -182,34 +183,23 @@ export class AdminController {
   @Get('admin/settings') @Roles('ADMIN') async getSettings() { return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing() }; }
   @Patch('admin/settings') @Roles('ADMIN') async setSettings(@Body() b: DeliverySettings) {
     await this.appSettings.setDelivery(b.deliveryFee, b.freeAbove);
-    if (b.financingEnabled !== undefined) await this.appSettings.setFinancing({ enabled: b.financingEnabled, depositPercent: b.depositPercent ?? 10, feePercent: b.feePercent ?? 1, categories: b.financingCategories ?? 'electronics,computers' });
+    if (b.financingEnabled !== undefined) await this.appSettings.setFinancing({ enabled: b.financingEnabled, depositPercent: b.depositPercent ?? 10, feePercent: b.feePercent ?? 1, categories: b.financingCategories ?? 'electronics,computers', partnerContact: b.partnerContact ?? '' });
     return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing() };
   }
   // ---- Pay later (Baadae): the admin confirms Baadae's decision and, later, that Baadae paid Omora. ----
-  @Patch('admin/financing/:id/approve') @Roles('ADMIN') async approveFinancing(@Param('id') id: string, @Body() b: { reference?: string }) {
-    const o = await this.db.order.findUnique({ where: { id }, include: { items: { include: { seller: { select: { userId: true } } } } } });
-    if (!o || !o.financed || o.status !== 'AWAITING_FINANCING') throw new BadRequestException('This order is not waiting for financing approval');
-    await this.db.$transaction([
-      this.db.order.update({ where: { id }, data: { status: 'PAID', financeStatus: 'APPROVED', financeRef: b?.reference?.trim() || null } }),
-      this.db.orderItem.updateMany({ where: { orderId: id, status: 'PENDING_PAYMENT' }, data: { status: 'PAID' } }),
-    ]);
-    const ref = id.slice(-8).toUpperCase();
-    await this.n.notify(o.customerId, 'Financing approved', `Baadae approved your pay-later order #${ref}. The seller is preparing it.`, '/orders', true);
-    for (const uid of new Set<string>(o.items.map((i: any) => i.seller.userId as string))) await this.n.notify(uid, 'New order', `You have a new paid order #${ref} to confirm.`, '/seller');
-    return { ok: true };
+  @Patch('admin/financing/:id/approve') @Roles('ADMIN') approveFinancing(@Req() req: any, @Param('id') id: string, @Body() b: { reference?: string }) { return this.fin.approve(id, b?.reference, req.user.id); }
+  @Patch('admin/financing/:id/decline') @Roles('ADMIN') declineFinancing(@Req() req: any, @Param('id') id: string) { return this.fin.decline(id, req.user.id); }
+  // People at the financing partner who may use the partner portal (/partner). They sign in with their own email.
+  @Get('admin/partners') @Roles('ADMIN') partnerStaff() { return this.db.user.findMany({ where: { role: 'FINANCING_PARTNER' as any, deletedAt: null }, select: { id: true, email: true, phone: true } }); }
+  @Post('admin/partners') @Roles('ADMIN') async addPartner(@Body() b: { email: string }) {
+    const email = String(b?.email || '').trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BadRequestException('Enter a valid email address');
+    const u: any = await this.db.user.findUnique({ where: { email } });
+    if (u && (u.deletedAt || (u.role !== 'CUSTOMER' && u.role !== 'FINANCING_PARTNER'))) throw new BadRequestException('That email already belongs to an account with another role');
+    const saved: any = u ? await this.db.user.update({ where: { id: u.id }, data: { role: 'FINANCING_PARTNER' } }) : await this.db.user.create({ data: { email, role: 'FINANCING_PARTNER' } });
+    return { id: saved.id, email: saved.email };
   }
-  // Declined: the goods go back on sale and the order becomes a refund request, so the deposit is returned through the normal refund screen.
-  @Patch('admin/financing/:id/decline') @Roles('ADMIN') async declineFinancing(@Param('id') id: string) {
-    const o = await this.db.order.findUnique({ where: { id }, include: { items: true } });
-    if (!o || !o.financed || o.status !== 'AWAITING_FINANCING') throw new BadRequestException('This order is not waiting for financing approval');
-    await this.db.$transaction([
-      ...o.items.map((i: any) => this.db.product.update({ where: { id: i.productId }, data: { stock: { increment: i.quantity } } })),
-      this.db.orderItem.updateMany({ where: { orderId: id }, data: { status: 'CANCELLED' } }),
-      this.db.order.update({ where: { id }, data: { status: 'REFUND_REQUESTED', financeStatus: 'DECLINED', refundReason: 'Pay-later application declined: refund the deposit.' } }),
-    ]);
-    await this.n.notify(o.customerId, 'Financing not approved', `Baadae could not approve order #${id.slice(-8).toUpperCase()}. Your deposit will be refunded. You can still buy the item by paying in full.`, '/orders', true);
-    return { ok: true };
-  }
+  @Delete('admin/partners/:id') @Roles('ADMIN') async removePartner(@Param('id') id: string) { await this.db.user.updateMany({ where: { id, role: 'FINANCING_PARTNER' as any }, data: { role: 'CUSTOMER' } }); return { ok: true }; }
   @Patch('admin/financing/:id/settled') @Roles('ADMIN') async settleFinancing(@Param('id') id: string, @Body() b: { reference?: string }) {
     const o = await this.db.order.findUnique({ where: { id } });
     if (!o || !o.financed || o.financeStatus !== 'APPROVED') throw new BadRequestException('Only approved pay-later orders can be marked as paid by Baadae');

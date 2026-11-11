@@ -46,9 +46,10 @@ export class EmailService {
 @Injectable()
 export class NotificationsService {
   constructor(private db: PrismaService, private sms: SmsService, private email: EmailService) {}
-  async notifyAdmins(title: string, body: string, link?: string, urgent = false) {
-    try { const admins: { id: string }[] = await this.db.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } }); for (const a of admins) await this.notify(a.id, title, body, link, urgent); } catch (e) { console.error('notifyAdmins failed', e); }
+  async notifyRole(role: string, title: string, body: string, link?: string, urgent = false) {
+    try { const users: { id: string }[] = await this.db.user.findMany({ where: { role: role as any, deletedAt: null }, select: { id: true } }); for (const u of users) await this.notify(u.id, title, body, link, urgent); } catch (e) { console.error('notifyRole failed', e); }
   }
+  notifyAdmins(title: string, body: string, link?: string, urgent = false) { return this.notifyRole('ADMIN', title, body, link, urgent); }
   async notify(userId: string, title: string, body: string, link?: string, urgent = false) {
     try {
       const u = await this.db.user.findUnique({ where: { id: userId } });

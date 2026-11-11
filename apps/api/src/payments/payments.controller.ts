@@ -125,6 +125,7 @@ export class PaymentsController implements OnModuleInit {
     if (!o) return; const ref = orderId.slice(-8).toUpperCase();
     if (o.financed) {
       await this.n.notify(o.customerId, 'Deposit received', `Your deposit for order #${ref} was received. Baadae will review your application and contact you.`, '/orders', true);
+      await this.n.notifyRole('FINANCING_PARTNER', 'New pay-later application', `Order #${ref}: the customer paid the deposit. Open the partner portal to review it.`, '/partner', true);
       await this.n.notifyAdmins('Pay-later request', `Order #${ref}: deposit paid. Review the Baadae application in Admin, Orders.`, '/admin', true);
       return;
     }

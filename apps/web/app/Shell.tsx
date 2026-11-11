@@ -32,7 +32,7 @@ function Login() {
 }
 
 // Step between the cart and M-Pesa: where to deliver, and which M-Pesa number to pay from.
-function CheckoutModal({ coupon, total, sub, fee, canFinance, pct }: { coupon?: string; total: number; sub: number; fee: number; canFinance: boolean; pct: number }) {
+function CheckoutModal({ coupon, total, sub, fee, canFinance, pct, contact }: { coupon?: string; total: number; sub: number; fee: number; canFinance: boolean; pct: number; contact: string }) {
   const { token, setPanel, checkout } = useStore();
   const [f, setF] = useState({ name: '', phone: '', area: '', address: '', notes: '', mpesa: '' }), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -40,6 +40,7 @@ function CheckoutModal({ coupon, total, sub, fee, canFinance, pct }: { coupon?: 
     call('/orders/last-address', 'GET', undefined, token).then((a: any) => setF(x => ({ ...x, name: a.name || '', phone: a.phone || '', area: a.area || '', address: a.address || '', notes: a.notes || '', mpesa: saved || a.phone || '' }))).catch(() => setF(x => ({ ...x, mpesa: saved })));
   }, [token]);
   const [mode, setMode] = useState<'full' | 'later'>('full');
+  const [consent, setConsent] = useState(false);
   const later = canFinance && mode === 'later', deposit = Math.ceil((sub * pct) / 100), payNow = later ? deposit + fee : total;
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
   const submit = async (e: React.FormEvent) => {
@@ -48,8 +49,9 @@ function CheckoutModal({ coupon, total, sub, fee, canFinance, pct }: { coupon?: 
     if (!phone) { setErr('Enter a valid Kenyan phone number for the delivery, e.g. 0712 345 678'); return; }
     if (!mpesa) { setErr('Enter a valid M-Pesa number'); return; }
     if (later && coupon) { setErr('Remove the coupon to pay later, or choose to pay in full.'); return; }
+    if (later && !consent) { setErr('Please agree to share your details with Baadae to pay later.'); return; }
     setBusy(true);
-    await checkout(later ? undefined : coupon, { name: f.name.trim(), phone, area: f.area.trim(), address: f.address.trim(), notes: f.notes.trim() || undefined }, mpesa, later);
+    await checkout(later ? undefined : coupon, { name: f.name.trim(), phone, area: f.area.trim(), address: f.address.trim(), notes: f.notes.trim() || undefined }, mpesa, later, consent);
     setBusy(false);
   };
   return (<form className="modal cform" role="dialog" aria-label="Delivery details" onSubmit={submit}>
@@ -64,6 +66,7 @@ function CheckoutModal({ coupon, total, sub, fee, canFinance, pct }: { coupon?: 
       <label className={'opt' + (!later ? ' on' : '')}><input type="radio" name="pm" checked={!later} onChange={() => setMode('full')} /><span><b>Pay in full with M-Pesa</b><small>KSh {total.toLocaleString('en-KE')}</small></span></label>
       <label className={'opt' + (later ? ' on' : '')}><input type="radio" name="pm" checked={later} onChange={() => setMode('later')} /><span><b>Pay later with Baadae</b><small>Pay KSh {(deposit + fee).toLocaleString('en-KE')} now ({pct}% deposit{fee ? ' + delivery' : ''}). If Baadae approves you, they cover the other KSh {(sub - deposit).toLocaleString('en-KE')} and you repay Baadae; they will contact you with the terms. If you are not approved, your deposit is refunded.</small></span></label>
     </div>}
+    {later && <label className="chk2"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} /> I agree that Omora shares my name, phone number and order details with Baadae Services so they can assess my application.{contact ? <> Documents Baadae asks for go directly to Baadae at <b>{contact}</b>, never to Omora.</> : null}</label>}
     <label>M-Pesa number to pay from<input required value={f.mpesa} onChange={set('mpesa')} type="tel" inputMode="tel" placeholder="Same as above if you leave it" /></label>
     {err && <p className="err">{err}</p>}
     <button className="btn" disabled={busy}>{later ? `Pay KSh ${payNow.toLocaleString('en-KE')} deposit with M-Pesa` : `Pay KSh ${total.toLocaleString('en-KE')} with M-Pesa`}</button>
@@ -73,11 +76,13 @@ function CheckoutModal({ coupon, total, sub, fee, canFinance, pct }: { coupon?: 
 
 function PayModal() {
   const { pay, setPay, payOrder, payCheck } = useStore();
+  const [contact, setContact] = useState('');
+  useEffect(() => { if (pay?.financed) call('/config').then((c: any) => setContact(c.financing?.partnerContact || '')).catch(() => {}); }, [pay?.financed]);
   if (!pay) return null;
   const ref = pay.orderId.slice(-8).toUpperCase(), amt = 'KSh ' + pay.amount.toLocaleString('en-KE');
   return (<><div className="scrim on" style={{ zIndex: 95 }} /><div className="modal paybox" role="dialog" aria-live="polite" style={{ zIndex: 96 }}>
     {pay.phase === 'waiting' && <><div className="spin" /><h3>Check your phone</h3><p>Enter your M-Pesa PIN to pay <b>{amt}</b>.</p><small>Keep this page open. We confirm your payment automatically.</small></>}
-    {pay.phase === 'success' && <><div className="tick">✓</div><h3>{pay.financed ? 'Deposit received' : 'Payment successful'}</h3><p>{pay.financed ? <>Thank you! We received your deposit for order <b>#{ref}</b>. Baadae will review your application and contact you. We process your order once it is approved.</> : <>Thank you! Your order <b>#{ref}</b> for <b>{amt}</b> is confirmed. The seller has been notified.</>}</p><a className="btn" href="/orders">View my order</a><button className="btn o2" onClick={() => setPay(null)}>Continue shopping</button></>}
+    {pay.phase === 'success' && <><div className="tick">✓</div><h3>{pay.financed ? 'Deposit received' : 'Payment successful'}</h3><p>{pay.financed ? <>Thank you! We received your deposit for order <b>#{ref}</b>. Baadae will review your application and contact you. We process your order once it is approved.{contact && <> Send any documents Baadae asks for (such as a payslip, ID or statements) directly to Baadae at <b>{contact}</b>, never to Omora, and pay only through Omora checkout.</>}</> : <>Thank you! Your order <b>#{ref}</b> for <b>{amt}</b> is confirmed. The seller has been notified.</>}</p><a className="btn" href="/orders">View my order</a><button className="btn o2" onClick={() => setPay(null)}>Continue shopping</button></>}
     {pay.phase === 'failed' && <><div className="cross">✕</div><h3>Payment not completed</h3><p>{pay.reason || 'The payment did not go through.'}</p><small>Your order #{ref} is saved. You can try again now or pay later from My Orders.</small><button className="btn" onClick={() => payOrder(pay.orderId, pay.amount)}>Try again</button><button className="btn o2" onClick={() => setPay(null)}>Close</button></>}
     {pay.phase === 'timeout' && <><div className="clock">⏳</div><h3>Still waiting for payment</h3><p>We haven’t received a confirmation for order <b>#{ref}</b> yet.</p><small>If M-Pesa already took the money, it will show on your order automatically within a few minutes.</small><button className="btn" onClick={payCheck}>Check again</button><button className="btn o2" onClick={() => setPay(null)}>Close</button></>}
   </div></>);
@@ -145,7 +150,7 @@ export default function Shell({ cats }: { cats: Cat[] }) {
     </aside>
 
     {panel === 'login' && <Login />}
-    {panel === 'checkout' && <CheckoutModal coupon={applied?.code} total={sub - disc + fee} sub={sub} fee={fee} canFinance={canFinance} pct={cfg.financing?.depositPercent || 10} />}
+    {panel === 'checkout' && <CheckoutModal coupon={applied?.code} total={sub - disc + fee} sub={sub} fee={fee} canFinance={canFinance} pct={cfg.financing?.depositPercent || 10} contact={cfg.financing?.partnerContact || ''} />}
     <PayModal />
     <nav className="tab" aria-label="Main"><a href="/">🏠<span>Home</span></a><a href="/orders">📦<span>Orders</span></a>
       <a href="#" onClick={e => { e.preventDefault(); setPanel('cart'); }}>🛒<span>Cart</span>{count > 0 && <em>{count}</em>}</a>

@@ -6,7 +6,7 @@ const sorts: Record<string, any> = { cheapest: { price: 'asc' }, expensive: { pr
 export class CatalogController {
   constructor(private db: PrismaService, private settings: SettingsService) {}
   // Public settings the website needs to show the same delivery fee the server will charge.
-  @Get('config') async config() { const f = await this.settings.financing(); return { ...(await this.settings.delivery()), financing: { enabled: f.enabled, depositPercent: f.depositPercent, categories: f.categories } }; }
+  @Get('config') async config() { const f = await this.settings.financing(); return { ...(await this.settings.delivery()), financing: { enabled: f.enabled, depositPercent: f.depositPercent, categories: f.categories, partnerContact: f.partnerContact } }; }
   @Get('categories') categories() { return this.db.category.findMany({ select: { id: true, name: true, slug: true, icon: true }, orderBy: { name: 'asc' } }); }
   @Get('products')
   async products(@Query('q') q?: string, @Query('category') category?: string, @Query('sort') sort?: string, @Query('page') page = '1', @Query('limit') limit = '20', @Query('minPrice') minPrice?: string, @Query('maxPrice') maxPrice?: string, @Query('minRating') minRating?: string, @Query('inStock') inStock?: string) {

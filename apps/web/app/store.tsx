@@ -61,11 +61,11 @@ export function Provider({ children }: { children: React.ReactNode }) {
       if (v.paid) setPay({ ...pay, phase: 'success', financed: v.financed }); else if (v.failed) setPay({ ...pay, phase: 'failed', reason: v.reason }); else toast('Still waiting for the payment');
     } catch (e: any) { toast(e.message); }
   };
-  const checkout = async (coupon?: string, address?: any, phone?: string, financing?: boolean) => {
+  const checkout = async (coupon?: string, address?: any, phone?: string, financing?: boolean, consent?: boolean) => {
     if (!token) { setPanel('login'); return; }
     const mpesa = phone || askPhone(); if (!mpesa) return;
     try {
-      const o = await call('/orders', 'POST', { items: items.map(i => ({ productId: i.id, quantity: i.qty })), coupon, address, financing }, token);
+      const o = await call('/orders', 'POST', { items: items.map(i => ({ productId: i.id, quantity: i.qty })), coupon, address, financing, financingConsent: consent }, token);
       localStorage.setItem('omora-phone', mpesa);
       setItems([]); setPanel('');
       await payOrder(o.id, o.financed ? o.depositAmount : o.total, mpesa); // pay-later: only the deposit goes through M-Pesa now

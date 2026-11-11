@@ -11,9 +11,9 @@ function Row({ c, save }: { c: any; save: (id: string, rate: number) => void }) 
     <button className="btn sm" style={{ margin: 0 }} onClick={() => save(c.id, +v / 100)}>Save</button></div></article>;
 }
 function SettingsTab({ token, toast }: any) {
-  const [f, setF] = useState({ deliveryFee: '', freeAbove: '', enabled: false, depositPercent: '10', feePercent: '1', categories: 'electronics,computers' });
-  useEffect(() => { call('/admin/settings', 'GET', undefined, token).then(r => setF({ deliveryFee: String(r.deliveryFee), freeAbove: String(r.freeAbove), enabled: !!r.financing?.enabled, depositPercent: String(r.financing?.depositPercent ?? 10), feePercent: String(r.financing?.feePercent ?? 1), categories: (r.financing?.categories || []).join(',') })).catch(() => {}); }, [token]);
-  const save = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/settings', 'PATCH', { deliveryFee: +f.deliveryFee, freeAbove: +f.freeAbove, financingEnabled: f.enabled, depositPercent: +f.depositPercent, feePercent: +f.feePercent, financingCategories: f.categories }, token); toast('Settings saved ✔'); } catch (x: any) { toast(x.message); } };
+  const [f, setF] = useState({ deliveryFee: '', freeAbove: '', enabled: false, depositPercent: '10', feePercent: '1', categories: 'electronics,computers', partnerContact: '' });
+  useEffect(() => { call('/admin/settings', 'GET', undefined, token).then(r => setF({ deliveryFee: String(r.deliveryFee), freeAbove: String(r.freeAbove), enabled: !!r.financing?.enabled, depositPercent: String(r.financing?.depositPercent ?? 10), feePercent: String(r.financing?.feePercent ?? 1), categories: (r.financing?.categories || []).join(','), partnerContact: r.financing?.partnerContact || '' })).catch(() => {}); }, [token]);
+  const save = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/settings', 'PATCH', { deliveryFee: +f.deliveryFee, freeAbove: +f.freeAbove, financingEnabled: f.enabled, depositPercent: +f.depositPercent, feePercent: +f.feePercent, financingCategories: f.categories, partnerContact: f.partnerContact }, token); toast('Settings saved ✔'); } catch (x: any) { toast(x.message); } };
   return <form className="sform" style={{ maxWidth: 460 }} onSubmit={save}><h3>Delivery</h3>
     <label>Delivery fee (KSh)<input required type="number" min={0} value={f.deliveryFee} onChange={e => setF({ ...f, deliveryFee: e.target.value })} /></label>
     <label>Free delivery for orders above (KSh)<input required type="number" min={0} value={f.freeAbove} onChange={e => setF({ ...f, freeAbove: e.target.value })} /></label>
@@ -22,6 +22,7 @@ function SettingsTab({ token, toast }: any) {
     <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" style={{ width: 'auto' }} checked={f.enabled} onChange={e => setF({ ...f, enabled: e.target.checked })} /> Offer “Pay later with Baadae” at checkout</label>
     <div className="two"><label>Deposit (% of goods)<input required type="number" min={1} max={90} step="0.5" value={f.depositPercent} onChange={e => setF({ ...f, depositPercent: e.target.value })} /></label><label>Baadae fee (% of goods)<input required type="number" min={0} max={20} step="0.1" value={f.feePercent} onChange={e => setF({ ...f, feePercent: e.target.value })} /></label></div>
     <label>Eligible category slugs<input value={f.categories} onChange={e => setF({ ...f, categories: e.target.value })} placeholder="electronics,computers" /></label>
+    <label>Where customers send documents to the partner (shown at checkout)<input value={f.partnerContact} onChange={e => setF({ ...f, partnerContact: e.target.value })} placeholder="partner email or phone" /></label>
     <small>Keep this off until the signed agreement, Baadae’s licence and how approvals reach you are all confirmed. Customers only see the option when every item in their cart is in an eligible category.</small>
     <button className="btn">Save</button></form>;
 }
@@ -47,6 +48,17 @@ function ApplicationsTab({ token, toast }: any) {
         <button className="btn sm o2" onClick={() => setOpen(open === a.id ? '' : a.id)}>{open === a.id ? 'Hide agreement' : 'View agreement'}</button></div>
       {open === a.id && <pre className="agree-box">{a.agreementText}</pre>}
     </article>))}</div>;
+}
+function PartnersBox({ token, toast }: any) {
+  const [list, setList] = useState<any[]>([]), [email, setEmail] = useState('');
+  const load = useCallback(() => { call('/admin/partners', 'GET', undefined, token).then(setList).catch(() => {}); }, [token]);
+  useEffect(load, [load]);
+  const add = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/partners', 'POST', { email }, token); setEmail(''); toast('Partner staff added ✔'); load(); } catch (x: any) { toast(x.message); } };
+  const remove = async (id: string) => { if (!window.confirm('Remove this person\'s access to the partner portal?')) return; try { await call('/admin/partners/' + id, 'DELETE', undefined, token); load(); } catch (x: any) { toast(x.message); } };
+  return <div className="sform" style={{ maxWidth: 460, marginTop: 14 }}><h3>Financing partner staff</h3>
+    <small>These people sign in with their own email and open <b>/partner</b>. They see only pay-later applications whose customers agreed to share their details, and can approve or decline them.</small>
+    {list.map(u => <div key={u.id} className="row"><span>{u.email || u.phone}</span><button type="button" className="btn sm o2" style={{ margin: 0 }} onClick={() => remove(u.id)}>Remove</button></div>)}
+    <form className="coupon" onSubmit={add}><input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="staff@partner.com" /><button className="btn sm">Add</button></form></div>;
 }
 function CouponsTab({ list, token, toast, reload }: any) {
   const blank = { code: '', kind: 'percent', value: '', minSpend: '', maxUses: '', days: '' }, [f, setF] = useState(blank);
@@ -124,7 +136,7 @@ export default function Admin() {
     {tab === 'Commissions' && <div className="olist">{comm.map(c => <Row key={c.id} c={c} save={(id, rate) => act(`/admin/commissions/${id}`, 'Commission updated ✔', { rate })} />)}</div>}
     {tab === 'Coupons' && <CouponsTab list={coupons} token={token} toast={toast} reload={load} />}
     {tab === 'Logistics' && <LogisticsTab token={token} toast={toast} />}
-    {tab === 'Settings' && <SettingsTab token={token} toast={toast} />}
+    {tab === 'Settings' && <><SettingsTab token={token} toast={toast} /><PartnersBox token={token} toast={toast} /></>}
     {tab === 'Applications' && <ApplicationsTab token={token} toast={toast} />}
     {tab === 'Payouts' && <div className="olist">{!payouts.length && <div className="empty">No payout requests.</div>}{payouts.map(p => (
       <article className="order" key={p.id}><div className="oline"><span className="oe">💸</span><div><b>{p.seller.storeName} · {money(p.amount)}</b><small>Send to: {p.payoutName ? `${p.payoutName} · ${p.payoutMpesa}` : `${p.seller.user.phone || 'no payout details'} (requested before payout details were required)`}{p.reference ? ' · Ref ' + p.reference : ''}</small></div>

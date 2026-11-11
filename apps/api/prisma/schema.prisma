@@ -13,6 +13,7 @@ enum Role {
   ADMIN
   SUPPORT_AGENT
   LOGISTICS_AGENT
+  FINANCING_PARTNER
 }
 
 enum SellerStatus {
@@ -161,6 +162,9 @@ model Order {
   financeFee       Int?
   financeRef       String?
   financeSettleRef String?
+  financeConsentAt DateTime?
+  financeDecidedBy String?
+  financeDecidedAt DateTime?
   discount         Int         @default(0)
   couponCode       String?
   status           OrderStatus @default(PENDING_PAYMENT)

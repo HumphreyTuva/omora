@@ -17,7 +17,7 @@ class AddressDto {
   @IsString() @Length(5, 200) address: string;
   @IsOptional() @IsString() @Length(0, 200) notes?: string;
 }
-class CreateOrder { @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => Line) items: Line[]; @IsOptional() @IsString() coupon?: string; @IsOptional() @IsBoolean() financing?: boolean; @ValidateNested() @Type(() => AddressDto) address: AddressDto; }
+class CreateOrder { @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => Line) items: Line[]; @IsOptional() @IsString() coupon?: string; @IsOptional() @IsBoolean() financing?: boolean; @IsOptional() @IsBoolean() financingConsent?: boolean; @ValidateNested() @Type(() => AddressDto) address: AddressDto; }
 class ReasonDto { @IsString() @Length(3, 300) reason: string; }
 const CUSTOMER_CANCELLABLE = ['PENDING_PAYMENT', 'PAID', 'SELLER_CONFIRMED'];
 class StatusDto { @IsIn(SELLER_STATUSES) status: string; }
@@ -50,9 +50,10 @@ export class OrdersController {
         if (!fin.enabled) throw new BadRequestException('Pay later is not available right now');
         if (!eligible) throw new BadRequestException('Pay later is only available for phones, laptops and other electronics');
         if (dto.coupon) throw new BadRequestException('Coupons cannot be used with pay later. Remove the coupon or pay in full.');
+        if (!dto.financingConsent) throw new BadRequestException('Please agree to share your details with Baadae to pay later');
         // The customer pays the deposit (a % of the goods) plus delivery now; Baadae pays the rest once the application is approved.
         const deposit = Math.ceil((subtotal * fin.depositPercent) / 100);
-        financed = { financed: true, depositAmount: deposit + fee, financeAmount: subtotal - deposit, financeFee: Math.round((subtotal * fin.feePercent) / 100) };
+        financed = { financed: true, financeConsentAt: new Date(), depositAmount: deposit + fee, financeAmount: subtotal - deposit, financeFee: Math.round((subtotal * fin.feePercent) / 100) };
       }
       if (dto.coupon) {
         const v = await validateCoupon(tx, dto.coupon, subtotal); discount = v.discount; couponCode = v.coupon.code;
