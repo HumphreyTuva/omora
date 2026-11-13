@@ -1,17 +1,44 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { call, useStore } from '../../store';
+import { API, call, useStore } from '../../store';
 import { normalizePhone } from '../../phone';
 import { renderText } from '../../agreement';
+import SecureFile from '../../SecureFile';
+import { shrink } from '../../shrink';
 const COUNTIES = ['Baringo','Bomet','Bungoma','Busia','Elgeyo-Marakwet','Embu','Garissa','Homa Bay','Isiolo','Kajiado','Kakamega','Kericho','Kiambu','Kilifi','Kirinyaga','Kisii','Kisumu','Kitui','Kwale','Laikipia','Lamu','Machakos','Makueni','Mandera','Marsabit','Meru','Migori','Mombasa',"Murang'a",'Nairobi','Nakuru','Nandi','Narok','Nyamira','Nyandarua','Nyeri','Samburu','Siaya','Taita-Taveta','Tana River','Tharaka-Nithi','Trans Nzoia','Turkana','Uasin Gishu','Vihiga','Wajir','West Pokot'];
-const STEPS = ['Your business', 'Plan', 'Agreement'];
+const STEPS = ['Your business', 'Documents', 'Plan', 'Agreement'];
+const DOC_LABEL: Record<string, string> = { ID_FRONT: 'National ID: front', ID_BACK: 'National ID: back', PASSPORT: 'Passport: photo page', KRA: 'KRA PIN certificate (optional)', BUSINESS_REG: 'Business registration certificate (optional)' };
+function Slot({ kind, docs, busy, onFile, onRemove }: any) {
+  const d = docs.find((x: any) => x.kind === kind);
+  return <div className="slot"><b>{DOC_LABEL[kind]}</b>
+    {d ? <div className="slotprev"><SecureFile path={`/sellers/documents/${d.id}`} mime={d.mime} alt={DOC_LABEL[kind]} /><button type="button" className="btn sm o2" onClick={() => onRemove(d.id)}>Remove</button></div>
+      : <div className="acts"><label className="btn sm">📷 Take photo<input hidden type="file" accept="image/*" capture="environment" onChange={e => onFile(kind, e.target.files?.[0])} /></label><label className="btn sm o2">⬆ Upload file<input hidden type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e => onFile(kind, e.target.files?.[0])} /></label></div>}
+    {busy === kind && <small>Uploading…</small>}</div>;
+}
 // Become a seller: business details, choose a plan, read and sign the agreement online (typed name + one-time code).
 export default function Apply() {
   const { token, setPanel, toast, login } = useStore();
-  const [ag, setAg] = useState<any>(null), [step, setStep] = useState(1), [busy, setBusy] = useState(false), [err, setErr] = useState(''), [sentTo, setSentTo] = useState('');
-  const [f, setF] = useState({ storeName: '', legalName: '', contactPerson: '', idNumber: '', kraPin: '', address: '', county: '', phone: '', email: '', categories: '', plan: 'STARTER', signedName: '', signedTitle: '', agree: false, code: '' });
+  const [ag, setAg] = useState<any>(null), [step, setStep] = useState(1), [busy, setBusy] = useState(false), [err, setErr] = useState(''), [sentTo, setSentTo] = useState(''), [docs, setDocs] = useState<any[]>([]), [busyKind, setBusyKind] = useState('');
+  const [f, setF] = useState({ storeName: '', legalName: '', contactPerson: '', idType: 'NATIONAL_ID', idNumber: '', kraPin: '', address: '', county: '', phone: '', email: '', categories: '', plan: 'STARTER', signedName: '', signedTitle: '', agree: false, code: '' });
   useEffect(() => { call('/sellers/agreement').then(setAg).catch(() => {}); setF(x => ({ ...x, phone: localStorage.getItem('omora-phone') || '' })); }, []);
   useEffect(() => { if (token) call('/sellers/application', 'GET', undefined, token).then((a: any) => { if (a?.id) window.location.href = '/seller/agreement'; }).catch(() => {}); }, [token]);
+  const loadDocs = () => call('/sellers/documents', 'GET', undefined, token).then(setDocs).catch(() => {});
+  useEffect(() => { if (token) loadDocs(); }, [token]); // eslint-disable-line
+  const onFile = async (kind: string, file?: File) => {
+    if (!file) return; setErr(''); setBusyKind(kind);
+    try {
+      const small = await shrink(file);
+      if (small.size > 6 * 1024 * 1024) throw new Error('That file is too large (maximum 6 MB)');
+      const fd = new FormData(); fd.append('kind', kind); fd.append('file', small);
+      const r = await fetch(`${API}/sellers/documents`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error([].concat(d.message || 'Upload failed').join(', '));
+      await loadDocs();
+    } catch (x: any) { setErr(x.message); }
+    setBusyKind('');
+  };
+  const removeDoc = async (id: string) => { try { await call('/sellers/documents/' + id, 'DELETE', undefined, token); await loadDocs(); } catch (x: any) { setErr(x.message); } };
+  const need = f.idType === 'PASSPORT' ? ['PASSPORT'] : ['ID_FRONT', 'ID_BACK'], haveAll = need.every(k => docs.some(d => d.kind === k && !d.applicationId));
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
   const plan = ag?.plans?.find((p: any) => p.id === f.plan);
   const phone = normalizePhone(f.phone);
@@ -36,20 +63,28 @@ export default function Apply() {
       <label>Store name (shown to customers)<input required minLength={2} maxLength={80} value={f.storeName} onChange={set('storeName')} placeholder="e.g. Hussein Gadgets" /></label>
       <label>Legal or registered business name (or your full name)<input required minLength={2} maxLength={120} value={f.legalName} onChange={set('legalName')} /></label>
       <label>Contact person<input required minLength={2} maxLength={80} value={f.contactPerson} onChange={set('contactPerson')} /></label>
-      <div className="two"><label>ID / registration number<input required minLength={4} maxLength={30} value={f.idNumber} onChange={set('idNumber')} /></label><label>KRA PIN<input required value={f.kraPin} onChange={set('kraPin')} placeholder="A123456789Z" /></label></div>
+      <div className="two"><label>ID type<select value={f.idType} onChange={set('idType')}><option value="NATIONAL_ID">National ID</option><option value="PASSPORT">Passport</option></select></label><label>{f.idType === 'PASSPORT' ? 'Passport number' : 'National ID number'}<input required minLength={4} maxLength={30} value={f.idNumber} onChange={set('idNumber')} /></label></div>
+      <div className="two"><label>KRA PIN<input required value={f.kraPin} onChange={set('kraPin')} placeholder="A123456789Z" /></label></div>
       <label>Business address (street, building)<input required minLength={5} maxLength={200} value={f.address} onChange={set('address')} /></label>
       <div className="two"><label>County<input required list="counties" value={f.county} onChange={set('county')} /></label><label>Phone / WhatsApp<input required type="tel" inputMode="tel" value={f.phone} onChange={set('phone')} placeholder="0712 345 678" /></label></div>
       <datalist id="counties">{COUNTIES.map(c => <option key={c} value={c} />)}</datalist>
       <label>Email<input required type="email" value={f.email} onChange={set('email')} /></label>
       <label>What will you sell?<input required minLength={3} maxLength={300} value={f.categories} onChange={set('categories')} placeholder="e.g. phones, laptops, accessories" /></label>
-      <small>Next you will be asked to upload ID and KRA documents for verification if Omora requests them. Payout details are added later in your Seller Portal.</small>
+      <small>Next you will upload a photo of your ID so we can check the number above. Payout details are added later in your Seller Portal.</small>
       {err && <p className="err">{err}</p>}<button className="btn">Continue</button></form>}
-    {step === 2 && <form className="sform" onSubmit={e => { e.preventDefault(); setF(x => ({ ...x, signedName: x.signedName || x.contactPerson })); setStep(3); window.scrollTo(0, 0); }}>
+    {step === 2 && <div className="sform">
+      <h3>Upload your documents</h3>
+      <small>Take a clear photo of your {f.idType === 'PASSPORT' ? 'passport photo page' : 'ID, front and back'}, or upload a scan. Make sure the number you typed (<b>{f.idNumber}</b>) matches it. Omora staff compare them before approving. Files are stored privately and only used to verify you.</small>
+      {need.map(k => <Slot key={k} kind={k} docs={docs} busy={busyKind} onFile={onFile} onRemove={removeDoc} />)}
+      <Slot kind="KRA" docs={docs} busy={busyKind} onFile={onFile} onRemove={removeDoc} /><Slot kind="BUSINESS_REG" docs={docs} busy={busyKind} onFile={onFile} onRemove={removeDoc} />
+      {err && <p className="err">{err}</p>}
+      <div className="acts"><button type="button" className="btn o2" onClick={() => setStep(1)}>Back</button><button type="button" className="btn" disabled={!haveAll || !!busyKind} onClick={() => { setErr(''); setStep(3); window.scrollTo(0, 0); }}>Continue</button></div></div>}
+    {step === 3 && <form className="sform" onSubmit={e => { e.preventDefault(); setF(x => ({ ...x, signedName: x.signedName || x.contactPerson })); setStep(4); window.scrollTo(0, 0); }}>
       <h3>Choose a plan</h3>
       <div className="plans">{ag?.plans?.map((p: any) => <label key={p.id} className={'plan' + (f.plan === p.id ? ' on' : '')}><input type="radio" name="plan" checked={f.plan === p.id} onChange={() => setF({ ...f, plan: p.id })} /><span><b>{p.name}</b><small>Registration KES {p.registration} once · KES {p.monthly.toLocaleString('en-KE')} a month</small><strong>{p.commission}% commission on each completed sale</strong></span></label>)}</div>
       <small>These are Omora’s introductory terms. Fees become binding as set out in the agreement on the next page.</small>
-      <div className="acts"><button type="button" className="btn o2" onClick={() => setStep(1)}>Back</button><button className="btn">Continue</button></div></form>}
-    {step === 3 && <form className="sform" onSubmit={submit}>
+      <div className="acts"><button type="button" className="btn o2" onClick={() => setStep(2)}>Back</button><button className="btn">Continue</button></div></form>}
+    {step === 4 && <form className="sform" onSubmit={submit}>
       <h3>Seller agreement</h3><small>Read the agreement below. It is filled in with your details.</small>
       <div className="agree-box" tabIndex={0}>{text}</div>
       <label className="chk2"><input type="checkbox" checked={f.agree} onChange={e => setF({ ...f, agree: e.target.checked })} /> I have read and agree to this Seller Registration &amp; Marketplace Agreement, and I am authorised to sign for the seller named above.</label>
@@ -57,6 +92,6 @@ export default function Apply() {
       <div className="two"><button type="button" className="btn o2" disabled={busy} onClick={sendCode}>{sentTo ? 'Send a new code' : 'Send me a signing code'}</button><label>6-digit code{sentTo ? ` sent to ${sentTo}` : ''}<input required inputMode="numeric" maxLength={6} value={f.code} onChange={e => setF({ ...f, code: e.target.value.trim() })} /></label></div>
       <small>Typing your name and entering the one-time code counts as your electronic signature. We record the time, the agreement version and your device details, and Omora countersigns when it approves your account.</small>
       {err && <p className="err">{err}</p>}
-      <div className="acts"><button type="button" className="btn o2" onClick={() => setStep(2)}>Back</button><button className="btn" disabled={busy || f.code.length !== 6 || !f.signedName || !f.signedTitle}>Sign and submit</button></div></form>}
+      <div className="acts"><button type="button" className="btn o2" onClick={() => setStep(3)}>Back</button><button className="btn" disabled={busy || f.code.length !== 6 || !f.signedName || !f.signedTitle}>Sign and submit</button></div></form>}
   </div></main>);
 }

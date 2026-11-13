@@ -25,6 +25,8 @@ export default function Privacy() {
     <p>We keep your information while your account is active and for as long as needed to handle orders, refunds, disputes and legal or accounting requirements. You may ask us to delete your account, subject to those requirements.</p>
     <h2>Your rights</h2>
     <p>Under Kenya’s Data Protection Act, 2019, you may ask to access, correct or delete your personal data, and to object to or restrict certain processing. To make a request, contact us{email ? <> at <a href={`mailto:${email}`}>{email}</a></> : <> through the <a href="/contact">contact page</a></>}.</p>
+    <h2>Seller identity documents</h2>
+    <p>Sellers upload a photo or scan of their ID or passport (and optionally KRA and business registration documents) so we can verify them. These files are stored in a private area, are visible only to Omora staff who verify sellers, and are never shown to customers or other sellers. We keep them while the seller account is active and for as long as the law or our verification records require afterwards.</p>
     <h2>Deleting your account</h2>
     <p>You can delete your account at any time from <a href="/account/delete">omoramarketplace.com/account/delete</a>. We remove your name, phone number, email, saved delivery addresses, wishlist, notifications and review comments. We keep order and payment records without your personal details, because we need them for accounting and legal reasons.</p>
     <h2>Children</h2>

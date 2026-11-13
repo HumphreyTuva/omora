@@ -1,4 +1,7 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
+import { StorageService } from '../storage/storage.service';
 import { JwtService } from '@nestjs/jwt';
 import { Transform } from 'class-transformer';
 import { Equals, IsEmail, IsIn, IsString, Length, Matches } from 'class-validator';
@@ -9,11 +12,13 @@ import { RateLimit } from '../common/rate-limit';
 import { normalizePhone } from '../common/phone';
 import { EmailService, NotificationsService, SmsService } from '../notifications/notifications.service';
 import { AGREEMENT_VERSION, PLANS, SECTIONS, renderAgreement } from '../sellers/agreement';
+const KINDS = ['ID_FRONT', 'ID_BACK', 'PASSPORT', 'KRA', 'BUSINESS_REG'];
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 class ApplicationDto {
   @IsString() @Length(2, 80) storeName: string;
   @IsString() @Length(2, 120) legalName: string;
   @IsString() @Length(2, 80) contactPerson: string;
+  @IsIn(['NATIONAL_ID', 'PASSPORT']) idType: string;
   @IsString() @Length(4, 30) idNumber: string;
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value)) @Matches(/^[A-Z]\d{9}[A-Z]$/, { message: 'Enter a valid KRA PIN, e.g. A123456789Z' }) kraPin: string;
   @IsString() @Length(5, 200) address: string;
@@ -29,7 +34,7 @@ class ApplicationDto {
 }
 @Controller('sellers')
 export class SellersController {
-  constructor(private db: PrismaService, private jwt: JwtService, private email: EmailService, private sms: SmsService, private n: NotificationsService) {}
+  constructor(private db: PrismaService, private jwt: JwtService, private email: EmailService, private sms: SmsService, private n: NotificationsService, private storage: StorageService) {}
 
   // Public: the agreement text and plans (the website fills in the seller's details and shows it).
   @Get('agreement') agreement() { return { version: AGREEMENT_VERSION, plans: PLANS, sections: SECTIONS }; }
@@ -37,6 +42,32 @@ export class SellersController {
   @Get('application') @UseGuards(JwtGuard) async mine(@Req() req: any) {
     const s: any = await this.db.seller.findUnique({ where: { userId: req.user.id }, include: { application: true } });
     return s?.application || {};
+  }
+
+  // ---- Identity documents (ID / passport, KRA certificate, business registration). Stored privately; shown only to the owner and to admins. ----
+  @Post('documents') @UseGuards(JwtGuard) @RateLimit(30, 3600) @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 6 * 1024 * 1024 } }))
+  async upload(@Req() req: any, @UploadedFile() file: any, @Body() b: any) {
+    const kind = String(b?.kind || '');
+    if (!KINDS.includes(kind)) throw new BadRequestException('Unknown document type');
+    if (!file) throw new BadRequestException('Choose a file');
+    const s: any = await this.db.seller.findUnique({ where: { userId: req.user.id }, include: { application: true } });
+    if (s?.application) throw new BadRequestException('Your application has already been submitted');
+    const key = await this.storage.savePrivate(file, 'seller-docs/' + req.user.id);
+    const old: any[] = await this.db.sellerDocument.findMany({ where: { userId: req.user.id, applicationId: null, kind } });
+    const doc: any = await this.db.sellerDocument.create({ data: { userId: req.user.id, kind, storageKey: key, mime: file.mimetype, size: file.size } });
+    for (const o of old) { await this.db.sellerDocument.delete({ where: { id: o.id } }); await this.storage.deletePrivate(o.storageKey); }
+    return { id: doc.id, kind: doc.kind, mime: doc.mime };
+  }
+  @Get('documents') @UseGuards(JwtGuard) mineDocs(@Req() req: any) { return this.db.sellerDocument.findMany({ where: { userId: req.user.id }, select: { id: true, kind: true, mime: true, createdAt: true, applicationId: true }, orderBy: { createdAt: 'asc' } }); }
+  @Get('documents/:id') @UseGuards(JwtGuard) async docFile(@Req() req: any, @Param('id') id: string, @Res() res: Response) {
+    const d: any = await this.db.sellerDocument.findFirst({ where: { id, userId: req.user.id } });
+    if (!d) throw new NotFoundException();
+    res.set({ 'Content-Type': d.mime, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' }); res.send(await this.storage.readPrivate(d.storageKey));
+  }
+  @Delete('documents/:id') @UseGuards(JwtGuard) async docRemove(@Req() req: any, @Param('id') id: string) {
+    const d: any = await this.db.sellerDocument.findFirst({ where: { id, userId: req.user.id, applicationId: null } });
+    if (!d) throw new NotFoundException();
+    await this.db.sellerDocument.delete({ where: { id } }); await this.storage.deletePrivate(d.storageKey); return { ok: true };
   }
 
   // A one-time code, sent to the email or phone on the account, that the seller must type to sign. It ties the signature to a verified identity.
@@ -62,6 +93,10 @@ export class SellersController {
     if (!u) throw new NotFoundException();
     if (u.role !== 'CUSTOMER' && u.role !== 'SELLER') throw new BadRequestException('This account cannot apply as a seller');
     if (u.seller?.application) throw new BadRequestException('You have already submitted your application');
+    // The ID must be uploaded (so the number typed above can be checked against it).
+    const docs: any[] = await this.db.sellerDocument.findMany({ where: { userId: u.id, applicationId: null } });
+    const have = (k: string) => docs.some(d => d.kind === k);
+    if (b.idType === 'PASSPORT' ? !have('PASSPORT') : !(have('ID_FRONT') && have('ID_BACK'))) throw new BadRequestException(b.idType === 'PASSPORT' ? 'Please upload the photo page of your passport' : 'Please upload the front and back of your national ID');
     const target = 'sign:' + u.id;
     const otp = await this.db.otp.findFirst({ where: { target, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } });
     if (!otp || otp.attempts >= 5) throw new BadRequestException('Your signing code has expired. Please request a new one.');
@@ -80,10 +115,12 @@ export class SellersController {
         sellerId = (await tx.seller.create({ data: { userId: u.id, storeName: b.storeName.trim() } })).id;
         await tx.user.update({ where: { id: u.id }, data: { role: 'SELLER' } });
       }
-      return tx.sellerApplication.create({ data: {
-        sellerId, legalName: b.legalName.trim(), idNumber: b.idNumber.trim(), kraPin: b.kraPin, address: b.address.trim(), county: b.county.trim(), phone: b.phone, email: b.email.trim().toLowerCase(),
+      const created = await tx.sellerApplication.create({ data: {
+        sellerId, idType: b.idType, legalName: b.legalName.trim(), idNumber: b.idNumber.trim(), kraPin: b.kraPin, address: b.address.trim(), county: b.county.trim(), phone: b.phone, email: b.email.trim().toLowerCase(),
         contactPerson: b.contactPerson.trim(), categories: b.categories.trim(), plan: b.plan, agreementVersion: AGREEMENT_VERSION, agreementText: text,
         signedName: vars.representative, signedTitle: vars.position, signedAt: now, signedIp: req.ip, signedUserAgent: String(req.headers['user-agent'] || '').slice(0, 300) } });
+      await tx.sellerDocument.updateMany({ where: { userId: u.id, applicationId: null }, data: { applicationId: created.id } });
+      return created;
     });
     await this.n.notifyAdmins('New seller application', `${b.storeName.trim()} (${plan.name} plan) signed the agreement. Review it in Admin, Applications.`, '/admin', true);
     await this.n.notify(u.id, 'Application received', 'Thanks! Omora will review your application and agreement and let you know.', '/seller');

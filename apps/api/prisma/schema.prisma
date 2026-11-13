@@ -310,5 +310,20 @@ model SellerApplication {
   reviewNote       String?
   reviewedAt       DateTime?
   countersignedBy  String?
+  idType           String    @default("NATIONAL_ID")
   createdAt        DateTime  @default(now())
+}
+
+model SellerDocument {
+  id            String   @id @default(cuid())
+  userId        String
+  applicationId String?
+  kind          String
+  storageKey    String
+  mime          String
+  size          Int
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([applicationId])
 }

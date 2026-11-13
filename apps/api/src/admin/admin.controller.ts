@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, ForbiddenException, Put, Get, NotFoundException, Param, Patch, Post, Req, UseGuards, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Put, Get, NotFoundException, Param, Patch, Post, Req, UseGuards, BadRequestException, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { StorageService } from '../storage/storage.service';
 import { SettingsService } from '../settings/settings.service';
 import { FinancingService } from '../financing/financing.service';
@@ -206,7 +207,16 @@ export class AdminController {
     return this.db.order.update({ where: { id }, data: { financeStatus: 'SETTLED', financeSettleRef: b?.reference?.trim() || null } });
   }
   // ---- Seller applications: the admin reviews the details and the signed agreement, then approves (counter-signs for Omora) or rejects. ----
-  @Get('admin/applications') @Roles('ADMIN') applications() { return this.db.sellerApplication.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { seller: { select: { storeName: true, status: true } } } }); }
+  @Get('admin/applications') @Roles('ADMIN') async applications() {
+    const apps: any[] = await this.db.sellerApplication.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { seller: { select: { storeName: true, status: true } } } });
+    const docs: any[] = await this.db.sellerDocument.findMany({ where: { applicationId: { in: apps.map(a => a.id) } }, select: { id: true, applicationId: true, kind: true, mime: true } });
+    return apps.map(a => ({ ...a, documents: docs.filter(d => d.applicationId === a.id) }));
+  }
+  @Get('admin/documents/:id') @Roles('ADMIN') async openDocument(@Param('id') id: string, @Res() res: Response) {
+    const d: any = await this.db.sellerDocument.findUnique({ where: { id } });
+    if (!d) throw new NotFoundException();
+    res.set({ 'Content-Type': d.mime, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' }); res.send(await this.storage.readPrivate(d.storageKey));
+  }
   @Patch('admin/applications/:id/approve') @Roles('ADMIN') async approveApplication(@Req() req: any, @Param('id') id: string) {
     const a: any = await this.db.sellerApplication.findUnique({ where: { id }, include: { seller: true } });
     if (!a) throw new NotFoundException();

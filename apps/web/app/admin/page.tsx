@@ -1,5 +1,6 @@
 'use client';
 import ProductImage from '../ProductImage';
+import SecureFile from '../SecureFile';
 import { useCallback, useEffect, useState } from 'react';
 import { call, useStore } from '../store';
 const money = (n: number) => 'KSh ' + (n || 0).toLocaleString('en-KE');
@@ -26,6 +27,7 @@ function SettingsTab({ token, toast }: any) {
     <small>Keep this off until the signed agreement, Baadae’s licence and how approvals reach you are all confirmed. Customers only see the option when every item in their cart is in an eligible category.</small>
     <button className="btn">Save</button></form>;
 }
+const DOCLABEL: Record<string, string> = { ID_FRONT: 'ID front', ID_BACK: 'ID back', PASSPORT: 'Passport photo page', KRA: 'KRA certificate', BUSINESS_REG: 'Business registration' };
 function ApplicationsTab({ token, toast }: any) {
   const [list, setList] = useState<any[]>([]), [open, setOpen] = useState('');
   const load = useCallback(() => { call('/admin/applications', 'GET', undefined, token).then(setList).catch(() => {}); }, [token]);
@@ -41,6 +43,8 @@ function ApplicationsTab({ token, toast }: any) {
       <div className="ohead"><div><b>{a.seller.storeName}</b><small>{a.legalName} · {label(a.plan)} plan · agreement v{a.agreementVersion}</small></div><span className={'chip ' + (a.status === 'APPROVED' ? 'delivered' : a.status === 'REJECTED' ? 'cancelled' : 'paid')}>{label(a.status)}</span></div>
       <p className="addr">ID / registration: {a.idNumber} · KRA PIN: {a.kraPin}<br />{a.phone} · {a.email} · Contact: {a.contactPerson}<br />{a.address}, {a.county}<br />Sells: {a.categories}</p>
       <p className="addr fin">✍️ Signed by {a.signedName}, {a.signedTitle} on {new Date(a.signedAt).toLocaleString('en-KE')} · IP {a.signedIp || 'n/a'} · confirmed with a one-time code</p>
+      <p className="addr">🪪 Check that the number on the {a.idType === 'PASSPORT' ? 'passport' : 'national ID'} matches what they typed: <b>{a.idNumber}</b></p>
+      {a.documents?.length ? <div className="docs">{a.documents.map((d: any) => <div key={d.id}><small>{DOCLABEL[d.kind] || d.kind}</small><SecureFile path={`/admin/documents/${d.id}`} mime={d.mime} alt={DOCLABEL[d.kind] || d.kind} /></div>)}</div> : <p className="addr">⚠️ No documents uploaded (this application was made before uploads were required).</p>}
       {a.status === 'REJECTED' && a.reviewNote && <p className="addr">Rejection reason: {a.reviewNote}</p>}
       <div className="acts" style={{ marginTop: 8 }}>
         {a.status !== 'APPROVED' && <button className="btn sm" onClick={() => act(a.id, 'approve')}>Approve and countersign</button>}
