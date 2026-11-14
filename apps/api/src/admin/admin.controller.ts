@@ -19,7 +19,7 @@ class PayoutDetails {
 class DeliverySettings {
   @IsInt() @Min(0) @Max(100000) deliveryFee: number; @IsInt() @Min(0) @Max(10000000) freeAbove: number;
   @IsOptional() @IsBoolean() financingEnabled?: boolean; @IsOptional() @IsNumber() @Min(1) @Max(90) depositPercent?: number;
-  @IsOptional() @IsNumber() @Min(0) @Max(20) feePercent?: number; @IsOptional() @IsString() @Length(0, 300) financingCategories?: string; @IsOptional() @IsString() @Length(0, 200) partnerContact?: string;
+  @IsOptional() @IsNumber() @Min(0) @Max(20) feePercent?: number; @IsOptional() @IsString() @Length(0, 300) financingCategories?: string; @IsOptional() @IsString() @Length(0, 200) partnerContact?: string; @IsOptional() @IsString() @Length(0, 20) docsWhatsapp?: string; @IsOptional() @IsString() @Length(0, 600) docsList?: string;
 }
 class EditProduct {
   @IsOptional() @IsString() @Length(2, 120) name?: string;
@@ -184,7 +184,7 @@ export class AdminController {
   @Get('admin/settings') @Roles('ADMIN') async getSettings() { return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing() }; }
   @Patch('admin/settings') @Roles('ADMIN') async setSettings(@Body() b: DeliverySettings) {
     await this.appSettings.setDelivery(b.deliveryFee, b.freeAbove);
-    if (b.financingEnabled !== undefined) await this.appSettings.setFinancing({ enabled: b.financingEnabled, depositPercent: b.depositPercent ?? 10, feePercent: b.feePercent ?? 1, categories: b.financingCategories ?? 'electronics,computers', partnerContact: b.partnerContact ?? '' });
+    if (b.financingEnabled !== undefined) await this.appSettings.setFinancing({ enabled: b.financingEnabled, depositPercent: b.depositPercent ?? 10, feePercent: b.feePercent ?? 1, categories: b.financingCategories ?? 'electronics,computers', partnerContact: b.partnerContact ?? '', docsWhatsapp: b.docsWhatsapp ?? '+254114085410', docsList: b.docsList });
     return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing() };
   }
   // ---- Pay later (Baadae): the admin confirms Baadae's decision and, later, that Baadae paid Omora. ----
@@ -201,6 +201,14 @@ export class AdminController {
     return { id: saved.id, email: saved.email };
   }
   @Delete('admin/partners/:id') @Roles('ADMIN') async removePartner(@Param('id') id: string) { await this.db.user.updateMany({ where: { id, role: 'FINANCING_PARTNER' as any }, data: { role: 'CUSTOMER' } }); return { ok: true }; }
+  // Omora records that it passed the customer's documents to Baadae (an audit trail, and Baadae sees it in their portal).
+  @Patch('admin/financing/:id/docs-forwarded') @Roles('ADMIN') async docsForwarded(@Param('id') id: string) {
+    const o: any = await this.db.order.findUnique({ where: { id } });
+    if (!o || !o.financed) throw new BadRequestException('This is not a pay-later order');
+    await this.db.order.update({ where: { id }, data: { financeDocsForwardedAt: new Date() } });
+    await this.n.notifyRole('FINANCING_PARTNER', 'Documents forwarded', `Omora forwarded the documents for pay-later order #${id.slice(-8).toUpperCase()}.`, '/partner', true);
+    return { ok: true };
+  }
   @Patch('admin/financing/:id/settled') @Roles('ADMIN') async settleFinancing(@Param('id') id: string, @Body() b: { reference?: string }) {
     const o = await this.db.order.findUnique({ where: { id } });
     if (!o || !o.financed || o.financeStatus !== 'APPROVED') throw new BadRequestException('Only approved pay-later orders can be marked as paid by Baadae');

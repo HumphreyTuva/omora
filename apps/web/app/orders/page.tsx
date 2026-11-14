@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { call, useStore } from '../store';
 import { normalizePhone } from '../phone';
+import DocsBox from '../DocsBox';
 function Rate({ productId, orderId }: { productId: string; orderId: string }) {
   const { token, toast } = useStore(); const [r, setR] = useState(0), [c, setC] = useState(''), [done, setDone] = useState(false);
   if (done) return <small>Thanks for your review ✔</small>;
@@ -28,8 +29,8 @@ function Actions({ o, reload }: { o: any; reload: () => void }) {
 export default function Orders() {
   const { token, setPanel } = useStore();
   const [orders, setOrders] = useState<any[] | null>(null), [err, setErr] = useState('');
-  const [contact, setContact] = useState('');
-  useEffect(() => { call('/config').then((c: any) => setContact(c.financing?.partnerContact || '')).catch(() => {}); }, []);
+  const [docs, setDocs] = useState({ whatsapp: '', list: '' });
+  useEffect(() => { call('/config').then((c: any) => setDocs({ whatsapp: c.financing?.docsWhatsapp || '', list: c.financing?.docsList || '' })).catch(() => {}); }, []);
   const reload = () => call('/orders', 'GET', undefined, token).then(setOrders).catch(e => setErr(e.message));
   useEffect(() => { if (token) reload(); }, [token]); // eslint-disable-line
   if (!token) return <main className="wrap"><div className="empty">Sign in to see your orders.<br /><br /><button className="btn" onClick={() => setPanel('login')}>Sign in</button></div></main>;
@@ -39,7 +40,8 @@ export default function Orders() {
     <div className="olist">{orders?.map(o => (
       <article className="order" key={o.id}>
         <div className="ohead"><div><b>Order #{o.id.slice(-8).toUpperCase()}</b><small>{new Date(o.createdAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</small></div><b className="ototal">{money(o.total)}</b></div>
-        {o.financed && <p className="addr fin">🏦 Pay later with Baadae · deposit {money(o.depositAmount)} · {money(o.financeAmount)} financed by Baadae · {o.financeStatus === 'APPROVED' || o.financeStatus === 'SETTLED' ? 'approved' : o.financeStatus === 'DECLINED' ? 'not approved (your deposit will be refunded)' : o.status === 'PENDING_PAYMENT' ? 'deposit not paid yet' : 'waiting for Baadae to approve'}{contact && o.status === 'AWAITING_FINANCING' && <><br />Send any documents Baadae asks for directly to Baadae at <b>{contact}</b>, never to Omora.</>}</p>}
+        {o.financed && <p className="addr fin">🏦 Pay later with Baadae · deposit {money(o.depositAmount)} · {money(o.financeAmount)} financed by Baadae · {o.financeStatus === 'APPROVED' || o.financeStatus === 'SETTLED' ? 'approved' : o.financeStatus === 'DECLINED' ? 'not approved (your deposit will be refunded)' : o.status === 'PENDING_PAYMENT' ? 'deposit not paid yet' : 'waiting for Baadae to approve'}</p>}
+        {o.financed && o.status === 'AWAITING_FINANCING' && docs.whatsapp && <DocsBox whatsapp={docs.whatsapp} list={docs.list} refCode={o.id.slice(-8).toUpperCase()} forwarded={o.financeDocsForwardedAt} />}
         {o.deliveryAddress && <p className="addr">📍 {o.deliveryName} · {o.deliveryPhone}<br />{o.deliveryAddress}, {o.deliveryArea}{o.deliveryNotes ? ` (${o.deliveryNotes})` : ''}</p>}
         {o.items.map((i: any) => (
           <div className="oline" key={i.id}><span className="oe">{i.product.emoji}</span>

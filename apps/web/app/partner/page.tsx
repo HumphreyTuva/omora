@@ -23,7 +23,7 @@ export default function Partner() {
     <div className="olist">{shown.map(a => (
       <article className="order" key={a.id}>
         <div className="ohead"><div><b>Order #{a.ref}</b><small>{new Date(a.createdAt).toLocaleString('en-KE')}</small></div><span className={'chip ' + (a.status === 'AWAITING_APPROVAL' ? 'awaiting_financing' : a.status === 'DECLINED' ? 'cancelled' : 'delivered')}>{a.status === 'AWAITING_APPROVAL' ? 'Waiting' : a.status.toLowerCase().replace(/^\w/, (c: string) => c.toUpperCase())}</span></div>
-        <p className="addr">👤 {a.customerName} · {a.customerPhone}{a.customerEmail ? ' · ' + a.customerEmail : ''}<br />📍 {a.area}<br />Agreed to share details: {new Date(a.consentAt).toLocaleString('en-KE')}</p>
+        <p className="addr">👤 {a.customerName} · {a.customerPhone}{a.customerEmail ? ' · ' + a.customerEmail : ''}<br />📍 {a.area}<br />Agreed to share details: {new Date(a.consentAt).toLocaleString('en-KE')}<br />📎 Documents: {a.docsForwardedAt ? 'forwarded by Omora on ' + new Date(a.docsForwardedAt).toLocaleString('en-KE') : 'not received from Omora yet'}</p>
         {a.items.map((i: any, k: number) => <div className="oline" key={k}><div><b>{i.name}</b><small>{i.quantity} × {money(i.price)}</small></div></div>)}
         <p className="addr fin">Goods {money(a.goodsTotal)} · deposit paid {money(a.deposit)} (includes delivery) · <b>to be financed {money(a.financeAmount)}</b>{a.reference ? ' · your ref ' + a.reference : ''}</p>
         {a.status === 'AWAITING_APPROVAL' && <div className="acts" style={{ marginTop: 8 }}><button className="btn sm" onClick={() => act(a.id, 'approve')}>Approve</button><button className="btn sm o2" onClick={() => act(a.id, 'decline')}>Decline</button></div>}

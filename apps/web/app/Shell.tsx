@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { call, useStore } from './store';
 import GoogleButton from './GoogleButton';
 import { normalizePhone } from './phone';
+import DocsBox from './DocsBox';
 type Cat = { id: string; name: string; slug: string; icon?: string };
 // Yellow outline icons, as in the design (the 📍 emoji is red and can't be recoloured)
 const Pin = ({ size = 24 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#FFC400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.6" /></svg>;
@@ -32,7 +33,7 @@ function Login() {
 }
 
 // Step between the cart and M-Pesa: where to deliver, and which M-Pesa number to pay from.
-function CheckoutModal({ coupon, total, sub, fee, canFinance, pct, contact }: { coupon?: string; total: number; sub: number; fee: number; canFinance: boolean; pct: number; contact: string }) {
+function CheckoutModal({ coupon, total, sub, fee, canFinance, pct, docsWhatsapp }: { coupon?: string; total: number; sub: number; fee: number; canFinance: boolean; pct: number; docsWhatsapp: string }) {
   const { token, setPanel, checkout } = useStore();
   const [f, setF] = useState({ name: '', phone: '', area: '', address: '', notes: '', mpesa: '' }), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -66,7 +67,7 @@ function CheckoutModal({ coupon, total, sub, fee, canFinance, pct, contact }: { 
       <label className={'opt' + (!later ? ' on' : '')}><input type="radio" name="pm" checked={!later} onChange={() => setMode('full')} /><span><b>Pay in full with M-Pesa</b><small>KSh {total.toLocaleString('en-KE')}</small></span></label>
       <label className={'opt' + (later ? ' on' : '')}><input type="radio" name="pm" checked={later} onChange={() => setMode('later')} /><span><b>Pay later with Baadae</b><small>Pay KSh {(deposit + fee).toLocaleString('en-KE')} now ({pct}% deposit{fee ? ' + delivery' : ''}). If Baadae approves you, they cover the other KSh {(sub - deposit).toLocaleString('en-KE')} and you repay Baadae; they will contact you with the terms. If you are not approved, your deposit is refunded.</small></span></label>
     </div>}
-    {later && <label className="chk2"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} /> I agree that Omora shares my name, phone number and order details with Baadae Services so they can assess my application.{contact ? <> Documents Baadae asks for go directly to Baadae at <b>{contact}</b>, never to Omora.</> : null}</label>}
+    {later && <label className="chk2"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} /> I agree that Omora and Baadae Services use my name, phone number and order details to assess my application, and that Omora passes the documents I send for it (such as a payslip, ID and statements) on to Baadae.{docsWhatsapp ? <> I will send them by WhatsApp to Omora at <b>{docsWhatsapp}</b>.</> : null}</label>}
     <label>M-Pesa number to pay from<input required value={f.mpesa} onChange={set('mpesa')} type="tel" inputMode="tel" placeholder="Same as above if you leave it" /></label>
     {err && <p className="err">{err}</p>}
     <button className="btn" disabled={busy}>{later ? `Pay KSh ${payNow.toLocaleString('en-KE')} deposit with M-Pesa` : `Pay KSh ${total.toLocaleString('en-KE')} with M-Pesa`}</button>
@@ -76,13 +77,14 @@ function CheckoutModal({ coupon, total, sub, fee, canFinance, pct, contact }: { 
 
 function PayModal() {
   const { pay, setPay, payOrder, payCheck } = useStore();
-  const [contact, setContact] = useState('');
-  useEffect(() => { if (pay?.financed) call('/config').then((c: any) => setContact(c.financing?.partnerContact || '')).catch(() => {}); }, [pay?.financed]);
+  const [docs, setDocs] = useState({ whatsapp: '', list: '' });
+  useEffect(() => { if (pay?.financed) call('/config').then((c: any) => setDocs({ whatsapp: c.financing?.docsWhatsapp || '', list: c.financing?.docsList || '' })).catch(() => {}); }, [pay?.financed]);
   if (!pay) return null;
   const ref = pay.orderId.slice(-8).toUpperCase(), amt = 'KSh ' + pay.amount.toLocaleString('en-KE');
   return (<><div className="scrim on" style={{ zIndex: 95 }} /><div className="modal paybox" role="dialog" aria-live="polite" style={{ zIndex: 96 }}>
     {pay.phase === 'waiting' && <><div className="spin" /><h3>Check your phone</h3><p>Enter your M-Pesa PIN to pay <b>{amt}</b>.</p><small>Keep this page open. We confirm your payment automatically.</small></>}
-    {pay.phase === 'success' && <><div className="tick">✓</div><h3>{pay.financed ? 'Deposit received' : 'Payment successful'}</h3><p>{pay.financed ? <>Thank you! We received your deposit for order <b>#{ref}</b>. Baadae will review your application and contact you. We process your order once it is approved.{contact && <> Send any documents Baadae asks for (such as a payslip, ID or statements) directly to Baadae at <b>{contact}</b>, never to Omora, and pay only through Omora checkout.</>}</> : <>Thank you! Your order <b>#{ref}</b> for <b>{amt}</b> is confirmed. The seller has been notified.</>}</p><a className="btn" href="/orders">View my order</a><button className="btn o2" onClick={() => setPay(null)}>Continue shopping</button></>}
+    {pay.phase === 'success' && <><div className="tick">✓</div><h3>{pay.financed ? 'Deposit received' : 'Payment successful'}</h3><p>{pay.financed ? <>Thank you! We received your deposit for order <b>#{ref}</b>. Baadae will review your application and contact you. We process your order once it is approved.</> : <>Thank you! Your order <b>#{ref}</b> for <b>{amt}</b> is confirmed. The seller has been notified.</>}</p>
+    {pay.financed && docs.whatsapp && <DocsBox whatsapp={docs.whatsapp} list={docs.list} refCode={ref} />}<a className="btn" href="/orders">View my order</a><button className="btn o2" onClick={() => setPay(null)}>Continue shopping</button></>}
     {pay.phase === 'failed' && <><div className="cross">✕</div><h3>Payment not completed</h3><p>{pay.reason || 'The payment did not go through.'}</p><small>Your order #{ref} is saved. You can try again now or pay later from My Orders.</small><button className="btn" onClick={() => payOrder(pay.orderId, pay.amount)}>Try again</button><button className="btn o2" onClick={() => setPay(null)}>Close</button></>}
     {pay.phase === 'timeout' && <><div className="clock">⏳</div><h3>Still waiting for payment</h3><p>We haven’t received a confirmation for order <b>#{ref}</b> yet.</p><small>If M-Pesa already took the money, it will show on your order automatically within a few minutes.</small><button className="btn" onClick={payCheck}>Check again</button><button className="btn o2" onClick={() => setPay(null)}>Close</button></>}
   </div></>);
@@ -150,7 +152,7 @@ export default function Shell({ cats }: { cats: Cat[] }) {
     </aside>
 
     {panel === 'login' && <Login />}
-    {panel === 'checkout' && <CheckoutModal coupon={applied?.code} total={sub - disc + fee} sub={sub} fee={fee} canFinance={canFinance} pct={cfg.financing?.depositPercent || 10} contact={cfg.financing?.partnerContact || ''} />}
+    {panel === 'checkout' && <CheckoutModal coupon={applied?.code} total={sub - disc + fee} sub={sub} fee={fee} canFinance={canFinance} pct={cfg.financing?.depositPercent || 10} docsWhatsapp={cfg.financing?.docsWhatsapp || ''} />}
     <PayModal />
     <nav className="tab" aria-label="Main"><a href="/">🏠<span>Home</span></a><a href="/orders">📦<span>Orders</span></a>
       <a href="#" onClick={e => { e.preventDefault(); setPanel('cart'); }}>🛒<span>Cart</span>{count > 0 && <em>{count}</em>}</a>

@@ -19,7 +19,7 @@ export class PartnerController {
       customerName: o.deliveryName, customerPhone: o.deliveryPhone, customerEmail: o.customer?.email || null, area: o.deliveryArea,
       items: o.items.map((i: any) => ({ name: i.product.name, quantity: i.quantity, price: i.price })),
       goodsTotal: o.items.reduce((a: number, i: any) => a + i.price * i.quantity, 0), deposit: o.depositAmount, financeAmount: o.financeAmount,
-      status: o.financeStatus, reference: o.financeRef, decidedAt: o.financeDecidedAt,
+      status: o.financeStatus, reference: o.financeRef, docsForwardedAt: o.financeDocsForwardedAt, decidedAt: o.financeDecidedAt,
     }));
   }
   @Patch('applications/:id/approve') @Roles('FINANCING_PARTNER', 'ADMIN') @RateLimit(60, 600) approve(@Req() req: any, @Param('id') id: string, @Body() b: { reference?: string }) { return this.fin.approve(id, b?.reference, req.user.id); }
