@@ -300,3 +300,10 @@ label.btn input[hidden]{display:none}
 /* Pay-later documents instructions */
 .docsbox{display:grid;gap:8px;background:#f3efff;border:1px solid #d9ceff;border-radius:12px;padding:12px 14px;margin:8px 0;text-align:left;font-size:14px}
 .docsbox ul{margin:0;padding-left:20px;display:grid;gap:3px}.docsbox .btn{justify-self:start;margin:0}.docsbox small{color:#444}
+
+/* Announcement bar + offers prompt */
+.ann{background:var(--y);color:#000;display:flex;justify-content:center;align-items:center;gap:12px;padding:7px 12px;font-size:14px;font-weight:600;text-align:center}
+.ann a{color:#000;text-decoration:underline}.ann button{color:#000;font-size:14px;padding:0 4px}
+.mprompt{position:fixed;left:12px;right:12px;bottom:84px;max-width:420px;margin:auto;background:#fff;border-radius:16px;padding:16px;box-shadow:0 12px 40px #0006;z-index:88;display:grid;gap:8px;animation:rise .4s var(--e) both;color:var(--tx)}
+.mprompt label{display:flex;gap:8px;align-items:center;font-weight:600}.mprompt small{color:var(--mu)}
+@media(min-width:1000px){.mprompt{left:auto;right:20px;bottom:20px;margin:0}}

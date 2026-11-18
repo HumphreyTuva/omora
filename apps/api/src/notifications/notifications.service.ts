@@ -26,20 +26,20 @@ export class EmailService {
     const raw = process.env.EMAIL_FROM || 'Omora <no-reply@example.com>', m = /^\s*(.*?)\s*<(.+)>\s*$/.exec(raw);
     return m ? { name: m[1].replace(/^"|"$/g, '') || 'Omora', email: m[2] } : { name: 'Omora', email: raw.trim() };
   }
-  async send(to: string, subject: string, text: string): Promise<boolean> {
+  async send(to: string, subject: string, text: string, opts?: { html?: string; headers?: Record<string, string> }): Promise<boolean> {
     const mode = process.env.EMAIL_MODE;
     if (mode === 'brevo') {
       try {
         const r = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST', headers: { 'api-key': process.env.BREVO_API_KEY || '', 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ sender: this.from(), to: [{ email: to }], subject, textContent: text }),
+          body: JSON.stringify({ sender: this.from(), to: [{ email: to }], subject, ...(opts?.html ? { htmlContent: opts.html } : { textContent: text }), ...(opts?.headers ? { headers: opts.headers } : {}) }),
         });
         if (!r.ok) { console.error('Brevo email failed', r.status, await r.text().catch(() => '')); return false; }
         return true;
       } catch (e) { console.error('Brevo email error', e); return false; }
     }
     if (!this.tx) { console.log(`[DEV EMAIL] ${to}: ${subject} - ${text}`); return true; }
-    try { await this.tx.sendMail({ from: process.env.EMAIL_FROM || 'Omora <no-reply@example.com>', to, subject, text }); return true; } catch (e) { console.error('Email error', e); return false; }
+    try { await this.tx.sendMail({ from: process.env.EMAIL_FROM || 'Omora <no-reply@example.com>', to, subject, text, ...(opts?.html ? { html: opts.html } : {}), ...(opts?.headers ? { headers: opts.headers } : {}) }); return true; } catch (e) { console.error('Email error', e); return false; }
   }
 }
 // One place to notify people: always an in-app message, optionally an SMS (or an email for email-only accounts). Failures never break the main action.

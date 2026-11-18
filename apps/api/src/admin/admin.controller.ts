@@ -20,6 +20,7 @@ class DeliverySettings {
   @IsInt() @Min(0) @Max(100000) deliveryFee: number; @IsInt() @Min(0) @Max(10000000) freeAbove: number;
   @IsOptional() @IsBoolean() financingEnabled?: boolean; @IsOptional() @IsNumber() @Min(1) @Max(90) depositPercent?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(20) feePercent?: number; @IsOptional() @IsString() @Length(0, 300) financingCategories?: string; @IsOptional() @IsString() @Length(0, 200) partnerContact?: string; @IsOptional() @IsString() @Length(0, 20) docsWhatsapp?: string; @IsOptional() @IsString() @Length(0, 600) docsList?: string;
+  @IsOptional() @IsBoolean() announcementEnabled?: boolean; @IsOptional() @IsString() @Length(0, 200) announcementText?: string; @IsOptional() @IsString() @Length(0, 300) announcementLink?: string;
 }
 class EditProduct {
   @IsOptional() @IsString() @Length(2, 120) name?: string;
@@ -181,11 +182,12 @@ export class AdminController {
     const c = await this.db.coupon.findUnique({ where: { id } }); if (!c) throw new NotFoundException();
     return this.db.coupon.update({ where: { id }, data: { active: !c.active } });
   }
-  @Get('admin/settings') @Roles('ADMIN') async getSettings() { return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing() }; }
+  @Get('admin/settings') @Roles('ADMIN') async getSettings() { return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing(), announcement: await this.appSettings.announcement() }; }
   @Patch('admin/settings') @Roles('ADMIN') async setSettings(@Body() b: DeliverySettings) {
     await this.appSettings.setDelivery(b.deliveryFee, b.freeAbove);
+    if (b.announcementEnabled !== undefined) await this.appSettings.setAnnouncement({ enabled: b.announcementEnabled, text: b.announcementText ?? '', link: b.announcementLink ?? '' });
     if (b.financingEnabled !== undefined) await this.appSettings.setFinancing({ enabled: b.financingEnabled, depositPercent: b.depositPercent ?? 10, feePercent: b.feePercent ?? 1, categories: b.financingCategories ?? 'electronics,computers', partnerContact: b.partnerContact ?? '', docsWhatsapp: b.docsWhatsapp ?? '+254114085410', docsList: b.docsList });
-    return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing() };
+    return { ...(await this.appSettings.delivery()), financing: await this.appSettings.financing(), announcement: await this.appSettings.announcement() };
   }
   // ---- Pay later (Baadae): the admin confirms Baadae's decision and, later, that Baadae paid Omora. ----
   @Patch('admin/financing/:id/approve') @Roles('ADMIN') approveFinancing(@Req() req: any, @Param('id') id: string, @Body() b: { reference?: string }) { return this.fin.approve(id, b?.reference, req.user.id); }

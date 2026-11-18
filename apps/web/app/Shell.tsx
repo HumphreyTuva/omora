@@ -75,6 +75,18 @@ function CheckoutModal({ coupon, total, sub, fee, canFinance, pct, docsWhatsapp 
   </form>);
 }
 
+// A gentle one-time question after sign-in. Nothing is ticked for the person, and "No thanks" is as easy as "Save".
+function MarketingPrompt() {
+  const { token, toast } = useStore();
+  const [p, setP] = useState<any>(null), [c, setC] = useState({ email: false, sms: false, whatsapp: false }), [show, setShow] = useState(false), [busy, setBusy] = useState(false);
+  useEffect(() => { if (!token) { setShow(false); return; } call('/account/preferences', 'GET', undefined, token).then((r: any) => { setP(r); setShow(!r.asked && (r.hasEmail || r.hasPhone)); }).catch(() => {}); }, [token]);
+  if (!show || !p) return null;
+  const save = async (opt: boolean) => { setBusy(true); try { await call('/account/preferences', 'PUT', opt ? c : {}, token); toast('Saved. You can change this any time under Offers & news.'); setShow(false); } catch (e: any) { toast(e.message); } setBusy(false); };
+  return <div className="mprompt" role="dialog" aria-label="Offers and news"><b>Get offers and news from Omora?</b><small>Tick how you would like to hear from us. We only use what you tick, and every message has a free unsubscribe.</small>
+    {p.hasEmail && <label><input type="checkbox" checked={c.email} onChange={e => setC({ ...c, email: e.target.checked })} /> Email</label>}
+    {p.hasPhone && <><label><input type="checkbox" checked={c.sms} onChange={e => setC({ ...c, sms: e.target.checked })} /> SMS</label><label><input type="checkbox" checked={c.whatsapp} onChange={e => setC({ ...c, whatsapp: e.target.checked })} /> WhatsApp</label></>}
+    <div className="acts"><button className="btn sm" disabled={busy || !(c.email || c.sms || c.whatsapp)} onClick={() => save(true)}>Save my choices</button><button className="btn sm o2" disabled={busy} onClick={() => save(false)}>No thanks</button></div></div>;
+}
 function PayModal() {
   const { pay, setPay, payOrder, payCheck } = useStore();
   const [docs, setDocs] = useState({ whatsapp: '', list: '' });
@@ -94,6 +106,8 @@ export default function Shell({ cats }: { cats: Cat[] }) {
   const { unread, wish, items, count, qty, panel, setPanel, msg, token, logout, checkout, toast } = useStore();
   const [cfg, setCfg] = useState<any>({ deliveryFee: 350, freeAbove: 20000, financing: { enabled: false, depositPercent: 10, categories: [] as string[] } });
   useEffect(() => { call('/config').then(setCfg).catch(() => {}); }, []);
+  const [annHidden, setAnnHidden] = useState(false);
+  useEffect(() => { try { setAnnHidden(localStorage.getItem('omora-ann') === cfg.announcement?.text); } catch {} }, [cfg.announcement?.text]);
   const [installEvt, setInstallEvt] = useState<any>(null); // Android Chrome offers to install Omora as an app
   useEffect(() => { const h = (e: any) => { e.preventDefault(); setInstallEvt(e); }; window.addEventListener('beforeinstallprompt', h); return () => window.removeEventListener('beforeinstallprompt', h); }, []);
   const canFinance = !!cfg.financing?.enabled && items.length > 0 && items.every((i: any) => cfg.financing.categories.includes(i.cat)); // every cart item must be a financeable category
@@ -118,12 +132,14 @@ export default function Shell({ cats }: { cats: Cat[] }) {
         <a href="/wishlist" style={{ ['--i' as any]: 10 }} onClick={() => setPanel('')}><span>❤️</span>Wishlist{wish.length > 0 && <em>{wish.length}</em>}</a>
         <a href="/notifications" style={{ ['--i' as any]: 11 }} onClick={() => setPanel('')}><span>🔔</span>Notifications{unread > 0 && <em>{unread}</em>}</a>
         <a href="/seller" style={{ ['--i' as any]: 12 }} onClick={() => setPanel('')}><span>🏪</span>Seller Portal</a>
+        {token && <a href="/account/preferences" style={{ ['--i' as any]: 11 }} onClick={() => setPanel('')}><span>📣</span>Offers & news</a>}
         {token && <a href="/account/delete" style={{ ['--i' as any]: 12 }} onClick={() => setPanel('')}><span>🗑️</span>Delete my account</a>}
         <a href="#" className="out" style={{ ['--i' as any]: 13 }} onClick={e => { e.preventDefault(); token ? logout() : setPanel('login'); }}><span>{token ? '🚪' : '👤'}</span>{token ? 'Sign out' : 'Sign in'}</a>
       </div>
     </aside>
 
     <header className="top">
+      {cfg.announcement?.enabled && cfg.announcement.text && !annHidden && <div className="ann"><a href={cfg.announcement.link || undefined}>{cfg.announcement.text}</a><button aria-label="Dismiss" onClick={() => { try { localStorage.setItem('omora-ann', cfg.announcement.text); } catch {} setAnnHidden(true); }}>✕</button></div>}
       <div className="strip"><span className="pinline"><Pin size={16} /> Deliver to <b>Nairobi, Kenya</b></span><span className="mid">🛡 Fast · Secure · Trusted</span><span className="links"><a href="/seller/apply">Become a Seller</a><a href="/orders">Track Order</a></span></div>
       <div className="bar">
         <button className="burger" onClick={() => setPanel('side')} aria-label="Open menu"><i /><i /><i /></button>
@@ -154,6 +170,7 @@ export default function Shell({ cats }: { cats: Cat[] }) {
     {panel === 'login' && <Login />}
     {panel === 'checkout' && <CheckoutModal coupon={applied?.code} total={sub - disc + fee} sub={sub} fee={fee} canFinance={canFinance} pct={cfg.financing?.depositPercent || 10} docsWhatsapp={cfg.financing?.docsWhatsapp || ''} />}
     <PayModal />
+    <MarketingPrompt />
     <nav className="tab" aria-label="Main"><a href="/">🏠<span>Home</span></a><a href="/orders">📦<span>Orders</span></a>
       <a href="#" onClick={e => { e.preventDefault(); setPanel('cart'); }}>🛒<span>Cart</span>{count > 0 && <em>{count}</em>}</a>
       <a href="/notifications">🔔<span>Alerts</span>{unread > 0 && <em>{unread}</em>}</a>

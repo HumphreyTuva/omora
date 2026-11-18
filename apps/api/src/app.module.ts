@@ -21,12 +21,14 @@ import { NotificationsController } from './notifications/notifications.controlle
 import { AccountController } from './account/account.controller';
 import { FinancingService } from './financing/financing.service';
 import { PartnerController } from './financing/partner.controller';
+import { MarketingService } from './marketing/marketing.service';
+import { MarketingController } from './marketing/marketing.controller';
 import { AdminController } from './admin/admin.controller';
 @Global()
 @Module({
   imports: [JwtModule.register({ global: true, secret: process.env.JWT_SECRET || 'dev-secret', signOptions: { expiresIn: '7d' } })],
-  controllers: [AuthController, CatalogController, OrdersController, PaymentsController, AdminController, SellersController, ReviewsController, WishlistController, CouponsController, LogisticsController, NotificationsController, AccountController, PartnerController],
-  providers: [PrismaService, AuthService, MpesaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService, FinancingService, { provide: APP_GUARD, useClass: RateLimitGuard }],
+  controllers: [AuthController, CatalogController, OrdersController, PaymentsController, AdminController, SellersController, ReviewsController, WishlistController, CouponsController, LogisticsController, NotificationsController, AccountController, PartnerController, MarketingController],
+  providers: [PrismaService, AuthService, MpesaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService, FinancingService, MarketingService, { provide: APP_GUARD, useClass: RateLimitGuard }],
   exports: [PrismaService, SmsService, EmailService, NotificationsService, StorageService, SettingsService],
 })
 export class AppModule {}

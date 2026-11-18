@@ -28,6 +28,17 @@ export class SettingsService {
     const put = (key: string, value: string) => this.db.setting.upsert({ where: { key }, update: { value }, create: { key, value } });
     await this.db.$transaction([put('FINANCING_ENABLED', String(f.enabled)), put('FINANCING_DEPOSIT_PERCENT', String(f.depositPercent)), put('FINANCING_FEE_PERCENT', String(f.feePercent)), put('FINANCING_CATEGORIES', f.categories), put('FINANCING_PARTNER_CONTACT', f.partnerContact ?? ''), put('FINANCING_DOCS_WHATSAPP', f.docsWhatsapp ?? '+254114085410'), put('FINANCING_DOCS_LIST', f.docsList ?? DEFAULT_DOCS)]);
   }
+  // The slim announcement bar shown at the top of every page (no consent needed: it is on our own website).
+  async announcement(): Promise<{ enabled: boolean; text: string; link: string }> {
+    let rows: { key: string; value: string }[] = [];
+    try { rows = await this.db.setting.findMany({ where: { key: { in: ['ANNOUNCEMENT_ENABLED', 'ANNOUNCEMENT_TEXT', 'ANNOUNCEMENT_LINK'] } } }); } catch { /* table not created yet */ }
+    const v = (k: string) => rows.find(r => r.key === k)?.value ?? '';
+    return { enabled: v('ANNOUNCEMENT_ENABLED') === 'true', text: v('ANNOUNCEMENT_TEXT'), link: v('ANNOUNCEMENT_LINK') };
+  }
+  async setAnnouncement(a: { enabled: boolean; text: string; link: string }) {
+    const put = (key: string, value: string) => this.db.setting.upsert({ where: { key }, update: { value }, create: { key, value } });
+    await this.db.$transaction([put('ANNOUNCEMENT_ENABLED', String(a.enabled)), put('ANNOUNCEMENT_TEXT', a.text), put('ANNOUNCEMENT_LINK', a.link)]);
+  }
   async setDelivery(deliveryFee: number, freeAbove: number) {
     const put = (key: string, v: number) => this.db.setting.upsert({ where: { key }, update: { value: String(v) }, create: { key, value: String(v) } });
     await this.db.$transaction([put('DELIVERY_FEE', deliveryFee), put('FREE_DELIVERY_ABOVE', freeAbove)]);

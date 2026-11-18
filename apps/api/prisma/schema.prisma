@@ -58,19 +58,25 @@ enum PaymentStatus {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  name          String?
-  phone         String?        @unique
-  email         String?        @unique
-  passwordHash  String?
-  role          Role           @default(CUSTOMER)
-  createdAt     DateTime       @default(now())
-  deletedAt     DateTime?
-  seller        Seller?
-  orders        Order[]
-  reviews       Review[]
-  wishlist      WishlistItem[]
-  notifications Notification[]
+  id                 String         @id @default(cuid())
+  name               String?
+  phone              String?        @unique
+  email              String?        @unique
+  passwordHash       String?
+  role               Role           @default(CUSTOMER)
+  createdAt          DateTime       @default(now())
+  deletedAt          DateTime?
+  marketingEmail     Boolean        @default(false)
+  marketingSms       Boolean        @default(false)
+  marketingWhatsapp  Boolean        @default(false)
+  marketingAskedAt   DateTime?
+  marketingConsentAt DateTime?
+  unsubToken         String?        @unique
+  seller             Seller?
+  orders             Order[]
+  reviews            Review[]
+  wishlist           WishlistItem[]
+  notifications      Notification[]
 }
 
 model Otp {
@@ -327,4 +333,31 @@ model SellerDocument {
 
   @@index([userId])
   @@index([applicationId])
+}
+
+model Promotion {
+  id          String    @id @default(cuid())
+  title       String
+  body        String
+  linkUrl     String?
+  linkLabel   String?
+  channels    String
+  status      String    @default("SENDING")
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  targetCount Int       @default(0)
+  sentCount   Int       @default(0)
+  failedCount Int       @default(0)
+}
+
+model PromotionLog {
+  id          String   @id @default(cuid())
+  promotionId String
+  userId      String
+  channel     String
+  ok          Boolean
+  createdAt   DateTime @default(now())
+
+  @@unique([promotionId, userId, channel])
 }

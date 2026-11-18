@@ -12,13 +12,18 @@ function Row({ c, save }: { c: any; save: (id: string, rate: number) => void }) 
     <button className="btn sm" style={{ margin: 0 }} onClick={() => save(c.id, +v / 100)}>Save</button></div></article>;
 }
 function SettingsTab({ token, toast }: any) {
-  const [f, setF] = useState({ deliveryFee: '', freeAbove: '', enabled: false, depositPercent: '10', feePercent: '1', categories: 'electronics,computers', partnerContact: '', docsWhatsapp: '+254114085410', docsList: '' });
-  useEffect(() => { call('/admin/settings', 'GET', undefined, token).then(r => setF({ deliveryFee: String(r.deliveryFee), freeAbove: String(r.freeAbove), enabled: !!r.financing?.enabled, depositPercent: String(r.financing?.depositPercent ?? 10), feePercent: String(r.financing?.feePercent ?? 1), categories: (r.financing?.categories || []).join(','), partnerContact: r.financing?.partnerContact || '', docsWhatsapp: r.financing?.docsWhatsapp ?? '+254114085410', docsList: r.financing?.docsList || '' })).catch(() => {}); }, [token]);
-  const save = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/settings', 'PATCH', { deliveryFee: +f.deliveryFee, freeAbove: +f.freeAbove, financingEnabled: f.enabled, depositPercent: +f.depositPercent, feePercent: +f.feePercent, financingCategories: f.categories, partnerContact: f.partnerContact, docsWhatsapp: f.docsWhatsapp, docsList: f.docsList }, token); toast('Settings saved ✔'); } catch (x: any) { toast(x.message); } };
+  const [f, setF] = useState({ deliveryFee: '', freeAbove: '', enabled: false, depositPercent: '10', feePercent: '1', categories: 'electronics,computers', partnerContact: '', docsWhatsapp: '+254114085410', docsList: '', announcementEnabled: false, announcementText: '', announcementLink: '' });
+  useEffect(() => { call('/admin/settings', 'GET', undefined, token).then(r => setF({ deliveryFee: String(r.deliveryFee), freeAbove: String(r.freeAbove), enabled: !!r.financing?.enabled, depositPercent: String(r.financing?.depositPercent ?? 10), feePercent: String(r.financing?.feePercent ?? 1), categories: (r.financing?.categories || []).join(','), partnerContact: r.financing?.partnerContact || '', docsWhatsapp: r.financing?.docsWhatsapp ?? '+254114085410', docsList: r.financing?.docsList || '', announcementEnabled: !!r.announcement?.enabled, announcementText: r.announcement?.text || '', announcementLink: r.announcement?.link || '' })).catch(() => {}); }, [token]);
+  const save = async (e: React.FormEvent) => { e.preventDefault(); try { await call('/admin/settings', 'PATCH', { deliveryFee: +f.deliveryFee, freeAbove: +f.freeAbove, financingEnabled: f.enabled, depositPercent: +f.depositPercent, feePercent: +f.feePercent, financingCategories: f.categories, partnerContact: f.partnerContact, docsWhatsapp: f.docsWhatsapp, docsList: f.docsList, announcementEnabled: f.announcementEnabled, announcementText: f.announcementText, announcementLink: f.announcementLink }, token); toast('Settings saved ✔'); } catch (x: any) { toast(x.message); } };
   return <form className="sform" style={{ maxWidth: 460 }} onSubmit={save}><h3>Delivery</h3>
     <label>Delivery fee (KSh)<input required type="number" min={0} value={f.deliveryFee} onChange={e => setF({ ...f, deliveryFee: e.target.value })} /></label>
     <label>Free delivery for orders above (KSh)<input required type="number" min={0} value={f.freeAbove} onChange={e => setF({ ...f, freeAbove: e.target.value })} /></label>
     <small>Applies to new orders only. Enter 0 in the second box to charge delivery on every order.</small>
+    <h3 style={{ marginTop: 10 }}>Announcement bar</h3>
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" style={{ width: 'auto' }} checked={f.announcementEnabled} onChange={e => setF({ ...f, announcementEnabled: e.target.checked })} /> Show a slim bar at the top of every page</label>
+    <label>Message (up to 200 characters)<input maxLength={200} value={f.announcementText} onChange={e => setF({ ...f, announcementText: e.target.value })} placeholder="e.g. Free delivery on orders above KSh 20,000 this week" /></label>
+    <label>Link when tapped (optional)<input value={f.announcementLink} onChange={e => setF({ ...f, announcementLink: e.target.value })} placeholder="https://www.omoramarketplace.com/?category=electronics" /></label>
+    <small>Everyone who visits sees this, including people who are not signed in. It needs no consent.</small>
     <h3 style={{ marginTop: 10 }}>Pay later (Baadae)</h3>
     <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" style={{ width: 'auto' }} checked={f.enabled} onChange={e => setF({ ...f, enabled: e.target.checked })} /> Offer “Pay later with Baadae” at checkout</label>
     <div className="two"><label>Deposit (% of goods)<input required type="number" min={1} max={90} step="0.5" value={f.depositPercent} onChange={e => setF({ ...f, depositPercent: e.target.value })} /></label><label>Baadae fee (% of goods)<input required type="number" min={0} max={20} step="0.1" value={f.feePercent} onChange={e => setF({ ...f, feePercent: e.target.value })} /></label></div>
@@ -30,6 +35,39 @@ function SettingsTab({ token, toast }: any) {
     <button className="btn">Save</button></form>;
 }
 const DOCLABEL: Record<string, string> = { ID_FRONT: 'ID front', ID_BACK: 'ID back', PASSPORT: 'Passport photo page', KRA: 'KRA certificate', BUSINESS_REG: 'Business registration' };
+function PromotionsTab({ token, toast }: any) {
+  const [f, setF] = useState({ title: '', body: '', linkUrl: '', linkLabel: 'Shop now', email: true, sms: false });
+  const [aud, setAud] = useState({ email: 0, sms: 0, whatsapp: 0 }), [list, setList] = useState<any[]>([]), [busy, setBusy] = useState(false);
+  const load = useCallback(() => { call('/admin/promotions/audience', 'GET', undefined, token).then(setAud).catch(() => {}); call('/admin/promotions', 'GET', undefined, token).then(setList).catch(() => {}); }, [token]);
+  useEffect(() => { load(); const t = setInterval(load, 8000); return () => clearInterval(t); }, [load]);
+  const channels = [...(f.email ? ['EMAIL'] : []), ...(f.sms ? ['SMS'] : [])], n = (f.email ? aud.email : 0) + (f.sms ? aud.sms : 0);
+  const link = f.linkUrl.trim(), smsLen = `Omora: ${f.title.trim()}. ${f.body.trim()}${link ? ' ' + link : ''}\nStop: omoramarketplace.com/u/xxxxxxxxxxxx`.length;
+  const payload = () => ({ title: f.title.trim(), body: f.body.trim(), linkUrl: link || undefined, linkLabel: link ? (f.linkLabel.trim() || 'Shop now') : undefined, channels });
+  const go = async (kind: 'test' | 'send') => {
+    if (!channels.length) { toast('Choose email or SMS'); return; }
+    if (kind === 'send' && !window.confirm(`Send this to ${n} people who opted in? This cannot be undone.`)) return;
+    setBusy(true);
+    try { const r = await call(kind === 'test' ? '/admin/promotions/test' : '/admin/promotions', 'POST', payload(), token); toast(kind === 'test' ? 'Test sent: ' + r.sent.join(', ') : 'Sending started ✔ Progress shows below'); if (kind === 'send') setF({ ...f, title: '', body: '', linkUrl: '' }); load(); } catch (e: any) { toast(e.message); }
+    setBusy(false);
+  };
+  const resume = async (id: string) => { try { await call(`/admin/promotions/${id}/resume`, 'POST', undefined, token); toast('Resumed'); load(); } catch (e: any) { toast(e.message); } };
+  const wa = async () => { try { const r = await call('/admin/promotions/whatsapp-list', 'GET', undefined, token); const csv = 'name,phone\n' + r.map((x: any) => `"${(x.name || '').replace(/"/g, '""')}",${x.phone}`).join('\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); const a = document.createElement('a'); a.href = url; a.download = 'omora-whatsapp-opt-ins.csv'; a.click(); URL.revokeObjectURL(url); } catch (e: any) { toast(e.message); } };
+  return <div className="pd2"><div>
+    <form className="sform" onSubmit={e => { e.preventDefault(); go('send'); }}><h3>New promotion</h3>
+      <small>Goes only to people who opted in. Opted in now: <b>{aud.email}</b> by email, <b>{aud.sms}</b> by SMS, <b>{aud.whatsapp}</b> by WhatsApp.</small>
+      <label>Headline (email subject)<input required minLength={3} maxLength={120} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="e.g. Weekend deals on phones" /></label>
+      <label>Message<textarea required minLength={3} maxLength={600} value={f.body} onChange={e => setF({ ...f, body: e.target.value })} placeholder="Short and clear. Say what the offer is and until when." /></label>
+      <div className="two"><label>Link (optional, https)<input value={f.linkUrl} onChange={e => setF({ ...f, linkUrl: e.target.value })} placeholder="https://www.omoramarketplace.com" /></label><label>Button label<input maxLength={30} value={f.linkLabel} onChange={e => setF({ ...f, linkLabel: e.target.value })} /></label></div>
+      <label className="chk2"><input type="checkbox" checked={f.email} onChange={e => setF({ ...f, email: e.target.checked })} /> Email ({aud.email})</label>
+      <label className="chk2"><input type="checkbox" checked={f.sms} onChange={e => setF({ ...f, sms: e.target.checked })} /> SMS ({aud.sms}) <small>{smsLen} characters{smsLen > 160 ? ', more than one SMS each' : ''}</small></label>
+      <small>Email costs nothing extra, but the free Brevo plan allows about 300 emails a day. Each SMS costs money once real SMS is switched on. Every message carries a free unsubscribe link automatically.</small>
+      <div className="acts"><button type="button" className="btn o2" disabled={busy || !f.title || !f.body} onClick={() => go('test')}>Send a test to me</button><button className="btn" disabled={busy || !f.title || !f.body || !n}>Send to {n} people</button></div></form>
+    <div className="sform" style={{ marginTop: 14 }}><h3>WhatsApp</h3><small>WhatsApp offers are not sent automatically. Download the list of people who opted in and message them from the Omora WhatsApp Business app, only to these numbers.</small><button type="button" className="btn o2" onClick={wa}>Download WhatsApp opt-in list</button></div></div>
+    <div className="olist">{!list.length && <div className="empty">No promotions sent yet.</div>}{list.map(p => (
+      <article className="order" key={p.id}><div className="ohead"><div><b>{p.title}</b><small>{p.channels.replace(',', ' + ')} · {new Date(p.createdAt).toLocaleString('en-KE')}</small></div><span className={'chip ' + (p.status === 'DONE' ? 'delivered' : p.status === 'FAILED' ? 'cancelled' : 'paid')}>{label(p.status)}</span></div>
+        <p className="addr">Sent {p.sentCount} of {p.targetCount}{p.failedCount ? ` · ${p.failedCount} failed` : ''}</p>
+        {p.status !== 'DONE' && <button className="btn sm o2" onClick={() => resume(p.id)}>Resume sending</button>}</article>))}</div></div>;
+}
 function ApplicationsTab({ token, toast }: any) {
   const [list, setList] = useState<any[]>([]), [open, setOpen] = useState('');
   const load = useCallback(() => { call('/admin/applications', 'GET', undefined, token).then(setList).catch(() => {}); }, [token]);
@@ -116,7 +154,7 @@ export default function Admin() {
   };
   const act = async (path: string, msg: string, body?: unknown) => { try { await call(path, 'PATCH', body, token); toast(msg); load(); } catch (e: any) { toast(e.message); } };
   return (<main className="wrap"><div className="h"><h2>Omora Admin</h2>
-    <div className="tabs">{['Sellers', 'Products', 'Orders', 'Refunds', 'Payouts', 'Commissions', 'Coupons', 'Logistics', 'Settings', 'Applications'].map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}{t === 'Sellers' && o?.pendingSellers ? ` (${o.pendingSellers})` : ''}{t === 'Refunds' && refunds.length ? ` (${refunds.length})` : ''}{t === 'Products' && o?.pendingProducts ? ` (${o.pendingProducts})` : ''}</button>)}</div></div>
+    <div className="tabs">{['Sellers', 'Products', 'Orders', 'Refunds', 'Payouts', 'Commissions', 'Coupons', 'Logistics', 'Settings', 'Applications', 'Promotions'].map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}{t === 'Sellers' && o?.pendingSellers ? ` (${o.pendingSellers})` : ''}{t === 'Refunds' && refunds.length ? ` (${refunds.length})` : ''}{t === 'Products' && o?.pendingProducts ? ` (${o.pendingProducts})` : ''}</button>)}</div></div>
     {o && <div className="stats" style={{ marginBottom: 18 }}>
       <div><small>Sales (GMV)</small><b>{money(o.gmv)}</b></div><div><small>Orders</small><b>{o.orders}</b></div><div><small>Customers</small><b>{o.customers}</b></div>
       <div><small>Sellers</small><b>{o.sellers}</b></div><div><small>Sellers awaiting review</small><b>{o.pendingSellers}</b></div><div><small>Products awaiting review</small><b>{o.pendingProducts}</b></div></div>}
@@ -144,6 +182,7 @@ export default function Admin() {
     {tab === 'Logistics' && <LogisticsTab token={token} toast={toast} />}
     {tab === 'Settings' && <><SettingsTab token={token} toast={toast} /><PartnersBox token={token} toast={toast} /></>}
     {tab === 'Applications' && <ApplicationsTab token={token} toast={toast} />}
+    {tab === 'Promotions' && <PromotionsTab token={token} toast={toast} />}
     {tab === 'Payouts' && <div className="olist">{!payouts.length && <div className="empty">No payout requests.</div>}{payouts.map(p => (
       <article className="order" key={p.id}><div className="oline"><span className="oe">💸</span><div><b>{p.seller.storeName} · {money(p.amount)}</b><small>Send to: {p.payoutName ? `${p.payoutName} · ${p.payoutMpesa}` : `${p.seller.user.phone || 'no payout details'} (requested before payout details were required)`}{p.reference ? ' · Ref ' + p.reference : ''}</small></div>
         <span className={'chip ' + (p.status === 'PAID' ? 'delivered' : 'paid')}>{label(p.status)}</span></div>
