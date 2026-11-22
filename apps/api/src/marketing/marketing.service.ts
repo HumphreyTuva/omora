@@ -59,7 +59,7 @@ export class MarketingService {
     const token = await this.tokenFor(u);
     try {
       if (ch === 'EMAIL') { const m = this.emailParts(p, u.name, token); return await this.email.send(u.email, p.title, m.text, { html: m.html, headers: m.headers }); }
-      await this.sms.send(u.phone, this.smsText(p, token)); return true;
+      return await this.sms.send(u.phone, this.smsText(p, token));
     } catch (e) { console.error('promotion delivery failed', e); return false; }
   }
   // A test goes only to the admin who is sending it.

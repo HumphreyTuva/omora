@@ -21,7 +21,7 @@ export class AuthService {
     if (isEmail(target)) {
       const ok = await this.email.send(target, 'Your Omora sign-in code', msg);
       if (!ok) { await this.db.otp.deleteMany({ where: { target } }); throw new BadRequestException('We could not send the email right now. Please try again, or sign in with Google.'); }
-    } else await this.sms.send(target, msg);
+    } else if (!(await this.sms.send(target, msg))) { await this.db.otp.deleteMany({ where: { target } }); throw new BadRequestException('We could not send the SMS right now. Please try again, or sign in with email or Google.'); }
     return { sent: true };
   }
   async verifyOtp(target: string, code: string) {

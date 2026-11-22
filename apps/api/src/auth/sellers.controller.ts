@@ -83,7 +83,7 @@ export class SellersController {
       if (!(await this.email.send(u.email, 'Sign your Omora seller agreement', msg))) throw new BadRequestException('We could not send the email right now. Please try again.');
       return { sent: true, to: u.email.replace(/^(.).*(@.*)$/, '$1***$2') };
     }
-    if (u.phone) { await this.sms.send(u.phone, msg); return { sent: true, to: u.phone.slice(0, 6) + '•••' + u.phone.slice(-3) }; }
+    if (u.phone) { if (!(await this.sms.send(u.phone, msg))) throw new BadRequestException('We could not send the SMS right now. Please try again.'); return { sent: true, to: u.phone.slice(0, 6) + '•••' + u.phone.slice(-3) }; }
     throw new BadRequestException('Add an email address or phone number to your account first');
   }
 

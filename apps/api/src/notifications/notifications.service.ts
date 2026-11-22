@@ -4,15 +4,30 @@ import { PrismaService } from '../prisma.service';
 // SMS_MODE=mock (default) prints messages in the API terminal. SMS_MODE=live sends through Africa's Talking.
 @Injectable()
 export class SmsService {
-  async send(phone: string, message: string) {
-    if (process.env.SMS_MODE !== 'live') { console.log(`[DEV SMS] ${phone}: ${message}`); return; }
+  private day = ''; private count = 0;
+  // A daily cap protects you from a surprise bill (for example someone repeatedly requesting sign-in codes). Default 300 messages a day; change it with SMS_DAILY_LIMIT.
+  private underLimit() {
+    const d = new Date().toISOString().slice(0, 10);
+    if (d !== this.day) { this.day = d; this.count = 0; }
+    if (this.count >= Number(process.env.SMS_DAILY_LIMIT || 300)) { console.error('SMS daily limit reached, message not sent'); return false; }
+    this.count++; return true;
+  }
+  // Returns true only if Africa's Talking accepted the message for this phone number.
+  async send(phone: string, message: string): Promise<boolean> {
+    if (process.env.SMS_MODE !== 'live') { console.log(`[DEV SMS] ${phone}: ${message}`); return true; }
+    if (!this.underLimit()) return false;
     try {
+      const body = new URLSearchParams({ username: process.env.AT_USERNAME!, to: phone, message });
+      if (process.env.AT_SENDER_ID) body.set('from', process.env.AT_SENDER_ID); // the approved sender name, e.g. OMORA
       const r = await fetch(`${process.env.AT_BASE || 'https://api.africastalking.com'}/version1/messaging`, {
-        method: 'POST', headers: { apiKey: process.env.AT_API_KEY!, Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username: process.env.AT_USERNAME!, to: phone, message }),
+        method: 'POST', headers: { apiKey: process.env.AT_API_KEY!, Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body,
       });
-      if (!r.ok) console.error('SMS failed', r.status);
-    } catch (e) { console.error('SMS error', e); }
+      const d: any = await r.json().catch(() => ({}));
+      if (!r.ok) { console.error('SMS failed', r.status, JSON.stringify(d).slice(0, 300)); return false; }
+      const rec = d?.SMSMessageData?.Recipients?.[0]; // an HTTP 201 can still hide a failure for this number (bad number, no balance, blocked sender)
+      if (!rec || !([100, 101, 102].includes(Number(rec.statusCode)) || /success/i.test(String(rec.status)))) { console.error('SMS not accepted:', rec?.status || JSON.stringify(d).slice(0, 300)); return false; }
+      return true;
+    } catch (e) { console.error('SMS error', e); return false; }
   }
 }
 // EMAIL_MODE=mock (default): prints emails in the API terminal.
