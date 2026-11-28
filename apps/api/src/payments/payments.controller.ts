@@ -16,11 +16,22 @@ const reasonFor = (code: number | null, desc?: string) => (code != null && FRIEN
 export class PaymentsController implements OnModuleInit {
   constructor(private db: PrismaService, private mpesa: MpesaService, private n: NotificationsService) {}
 
-  // Safety net: every 20 s, ask Safaricom about payments still waiting (last 20 minutes), so an order never stays unpaid
-  // just because a callback was missed (e.g. the free server was asleep) or the customer closed the page.
+  // Safety net: ask Safaricom about payments still waiting, so an order never stays unpaid just because a callback was missed
+  // (e.g. the free server was asleep) or the customer closed the page.
+  // IMPORTANT: the database (Neon) only goes to sleep, and stops using up its monthly hours, when nothing touches it for 5 minutes.
+  // So we check every 20 s ONLY while a payment is expected (a few minutes after one starts), and otherwise just every 2 hours
+  // and once when the server starts (to catch anything missed while it was asleep).
+  private watchUntil = 0; private lastIdleCheck = 0;
+  private watch(minutes = 6) { this.watchUntil = Date.now() + minutes * 60_000; }
   onModuleInit() {
     if (process.env.MPESA_MODE !== 'live') return;
-    const t = setInterval(() => this.sweep().catch(e => console.error('payment sweep failed', e)), 20_000);
+    const t = setInterval(() => {
+      const now = Date.now();
+      if (now < this.watchUntil || now - this.lastIdleCheck > 2 * 3_600_000) {
+        if (now >= this.watchUntil) this.lastIdleCheck = now;
+        this.sweep().catch(e => console.error('payment sweep failed', e));
+      }
+    }, 20_000);
     (t as any).unref?.();
   }
   private async sweep() {
@@ -42,11 +53,13 @@ export class PaymentsController implements OnModuleInit {
     const amount = order.financed ? (order.depositAmount ?? order.total) : order.total; // pay-later orders: only the deposit (+ delivery) is paid by M-Pesa
     const reference = await this.mpesa.stkPush(b.phone, amount, order.id);
     const payment = await this.db.payment.create({ data: { orderId: order.id, provider: 'MPESA', amount, reference } });
+    this.watch(); // a payment is now expected: check on it every 20 s for the next few minutes
     return { paymentId: payment.id, message: 'Check your phone and enter your M-Pesa PIN' };
   }
 
   // Safaricom calls this. Three checks before an order is marked paid: the secret in the URL, the amount, and a direct confirmation from Safaricom.
   @Post('callback') @HttpCode(200) async callback(@Query('secret') secret: string, @Body() body: any) {
+    this.watch(3);
     const expected = process.env.MPESA_CALLBACK_SECRET;
     if (process.env.MPESA_MODE === 'live' && (!expected || secret !== expected)) { console.error('M-Pesa callback rejected: bad or missing secret'); return ACK; }
     const cb = body?.Body?.stkCallback;
@@ -64,6 +77,7 @@ export class PaymentsController implements OnModuleInit {
 
   // The website calls this after the customer pays. Returns { paid } or { failed, reason } or neither (still waiting).
   @Post('verify/:orderId') @UseGuards(JwtGuard) async verify(@Req() req: any, @Param('orderId') orderId: string) {
+    this.watch(3);
     const order = await this.db.order.findUnique({ where: { id: orderId }, include: { payments: true } });
     if (!order || order.customerId !== req.user.id) throw new NotFoundException();
     return this.reconcile(order);
